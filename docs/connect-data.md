@@ -33,6 +33,22 @@ unrelated descriptor props. The existing history, draft, preview and publish
 lifecycle stores configuration; no connected row values are written into block
 JSON or snapshots. Published pages read current source data at render time.
 
+### Multiple fields and inline text
+
+Use **+** in the content mapping to add ordered fields. The first column is stored
+in `set.content.content`; extra columns use `set.content.additional`. Runtime joins
+nonempty scalar values with a space. Optional `set.content.before` and
+`set.content.after` strings surround the resolved text and preserve authored
+spaces. Empty scalar values remain valid; if none of the mapped fields resolves
+to a scalar value, authored fallback content is retained. Empty affixes are
+omitted by the editor.
+
+During rich-text editing, **Connect text to database** mounts these same mapping
+and filter controls in a temporary popup. Apply connects the selected fragment or
+updates its connection; Cancel leaves the document unchanged. If the surrounding
+text block already has a connection, editing a fragment updates that existing
+connection. Formatting operations preserve inline descriptor metadata.
+
 ## Descriptor format
 
 ```json

@@ -28,7 +28,7 @@ checks = 0
 
 class FixtureHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path in ('/dashboard-fixture/pages','/dashboard-fixture/templates','/dashboard-fixture/history'):
+        if self.path in ('/dashboard-fixture/pages','/dashboard-fixture/templates','/dashboard-fixture/history','/dashboard-fixture/components','/dashboard-fixture/routes','/dashboard-fixture/external-pages','/dashboard-fixture/external-components'):
             origin = f'http://127.0.0.1:{self.server.server_port}'
             rendered = subprocess.run(['php', str(ROOT / 'tests/dashboard_fixture.php'), self.path.rsplit('/',1)[-1]], env={**os.environ, 'EDITOR_TEST_ORIGIN': origin}, capture_output=True, check=True).stdout
             self.send_response(200)
@@ -1468,7 +1468,7 @@ def exercise_dashboard(endpoint, origin, screenshot=None):
     history.check('document.querySelector("[data-quill-command-go]").classList.contains("btn-danger") && document.querySelector("#quill-command-description").textContent.includes("permanently")', 'Snapshot deletion has its own destructive confirmation')
     templates=Page(endpoint,origin+'/dashboard-fixture/templates')
     templates.wait('document.readyState==="complete" && !!document.querySelector("[data-quill-open-editor]")')
-    templates.check('document.querySelector(`a[href="/dashboard/quill/templates"]`).classList.contains("active") && document.querySelector("[data-quill-open-editor] [name=template_id]").value==="3"', 'My templates is a dedicated tab with a create-from-template action')
+    templates.check('document.querySelector(`a[href="/dashboard/quill/templates"]`).getAttribute("aria-current")==="page" && document.querySelector("[data-quill-open-editor] [name=template_id]").value==="3"', 'My templates is a dedicated tab with a create-from-template action')
     templates.evaluate('document.querySelector("[data-quill-manage]").click()')
     templates.check('document.querySelector("#quill-create-form").action.endsWith("/dashboard/quill/update/template")', 'Template management uses its private update endpoint')
     for current in [page,history,templates]:

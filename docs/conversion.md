@@ -1,11 +1,14 @@
-# Konverzija Quill i URPC dokumenata
+# Quill and URPC document conversion
 
-Konverzija koristi postojeće Quill modele i instaliran URPC PHP API. Ne poziva
-renderer ili processore, ne izvršava kod iz JSON-a i ne dodeljuje UID-jeve.
-Quill → URPC kod je u `Quill\services\conversion\quillToUrpc`.
-Obrnuti smer je u `Quill\services\conversion\urpcToQuill`, a zajedničke
-JSON provere i `ConversionException` su u `Quill\services\conversion\shared`.
-Prethodni importi direktno iz `conversion` zamenjeni su ovim namespace-ovima.
+Conversion uses Quill models and the installed URPC PHP API. It does not render documents, run processors, execute code from JSON or assign URPC UIDs.
+
+| Namespace | Responsibility |
+| --- | --- |
+| `Quill\services\conversion\quillToUrpc` | Quill → URPC conversion and transport serialization |
+| `Quill\services\conversion\urpcToQuill` | Structural URPC → Quill import |
+| `Quill\services\conversion\shared` | Shared JSON validation and `ConversionException` |
+
+## Quill → URPC
 
 ```php
 use Quill\models\QuillPage;
@@ -16,40 +19,38 @@ use Quill\services\conversion\quillToUrpc\UrpcJsonSerializer;
 $page = new QuillPage();
 $page->selectByID(1);
 
-// Vrednosti su primer konfiguracije aplikacije, nisu Quill podrazumevane vrednosti.
+// Example application configuration, not Quill defaults.
 $converter = new QuillToUrpcConverter(['tablet' => 900, 'mobile' => 600]);
 $result = $converter->convert(new WorkingQuillContentSource($page), 'Quill/page/1');
 
-$document = $result->document; // IURPCDocument, spreman za pozivaoca URPC renderera.
+$document = $result->document; // IURPCDocument for the caller's URPC renderer.
 $assets = $result->assets;     // ['styles' => [...], 'scripts' => [...]]
-$css = $result->scopedCss;     // CSS koji pozivalac zasebno uključuje.
+$css = $result->scopedCss;     // CSS to include separately.
 
 $serializer = new UrpcJsonSerializer();
 $transport = $serializer->serializeDocument($document);
 $loaderJson = $serializer->serializeSection($document, 'main');
 ```
 
-Za dokument sa sekcijom `main`, ID referencom `[101]` i element blokom
-`101` čiji je descriptor `h1`, a content `Naslov`, transport je:
+For a `main` section referencing block `[101]`, where block `101` is an `h1` element containing `Heading`, the transport is:
 
 ```json
-{"schema_version":1,"sections":[{"name":"main","blocks":[{"descriptor":{"name":"h1","props":{},"renderer":""},"attributes":{},"content":"Naslov","children":[]}]}]}
+{"schema_version":1,"sections":[{"name":"main","blocks":[{"descriptor":{"name":"h1","props":{},"renderer":""},"attributes":{},"content":"Heading","children":[]}]}]}
 ```
 
-Izvoz samo sekcije `main` daje oblik koji prihvata postojeći URPC loader:
+Serializing only `main` produces the format accepted by the existing URPC loader:
 
 ```json
-{"blocks":[{"descriptor":{"name":"h1","props":{},"renderer":""},"attributes":{},"content":"Naslov","children":[]}]}
+{"blocks":[{"descriptor":{"name":"h1","props":{},"renderer":""},"attributes":{},"content":"Heading","children":[]}]}
 ```
 
-Omotač sa `sections` je Quill transport, a ne URPC loader format. PHP dokument
-nastaje direktno, bez prolaska kroz taj transport. Prazni props/attributes
-serijalizuju se kao objekti; ugnježdeni objekti u props ostaju `stdClass`, a nizovi
-ostaju nizovi. Source key je postavljen preko `setSourceKey()`. Podrazumevana
-vrednost je `Quill/` praćeno identitetom izvora; aplikacija može proslediti
-stabilan ključ stranice kao u primeru ako želi isti namespace kroz revizije.
+The `sections` wrapper is Quill transport, not URPC loader input. PHP documents are built directly without passing through this transport. Empty props/attributes serialize as objects; nested props objects remain `stdClass` and arrays remain arrays.
 
-Za snapshot koristi se već učitan **konkretan snapshot**, ne broj trenutne revizije:
+The source key is assigned through `setSourceKey()`. Its default is `Quill/` followed by the source identity. Supply a stable page key, as above, to retain a namespace across revisions.
+
+### Working content and snapshots
+
+Snapshot conversion takes an already loaded, specific snapshot, not a current revision number:
 
 ```php
 use Quill\models\QuillPageSnapshot;
@@ -60,60 +61,23 @@ $snapshot->selectByID(42);
 $result = $converter->convert(new SnapshotQuillContentSource($snapshot), 'Quill/page/1');
 ```
 
-Oba izvora prihvataju i odgovarajući component model kao korenski dokument.
-Snapshot izvor koristi `quill_*_snapshot_block` i `quill_*_snapshot_component`
-manifest veze. Proverava da učitani snapshot pripada referenciranom bloku ili
-komponenti. Ugnježdena komponenta dobija sopstveni snapshot scope. Nedostajuća
-ili višeznačna manifest veza je greška, bez fallback-a. Radni izvor koristi
-trenutne, neobrisane blokove i komponente. Koriste se filtrirani upiti modela,
-bez kolekcija koje automatski učitavaju celu tabelu. Keš dekodiranog sadržaja i
-razrešenih komponenti traje jedan poziv; svaka instanca dobija zasebno stablo.
+Both sources also accept their corresponding component model as the root document. The snapshot source follows `quill_*_snapshot_block` and `quill_*_snapshot_component` manifest links and verifies ownership. Nested components receive their own snapshot scope. Missing or ambiguous links are errors, with no fallback to working content.
 
-Podržan ulaz je `schema_version: 1`, sa uređenim `sections` i integer ID
-referencama. Postojeći save controller inicijalno čuva `{}`: takav nedovršen
-dokument namerno daje grešku za nedostajući schema_version. Baza i save ugovor
-nisu promenjeni. Nazivi sekcija moraju biti jedinstveni i nenumerički jer URPC
-čuva sekcije kao ključeve PHP niza. Assets su uređene liste nepraznih stringova u
-`styles` i `scripts`; assets komponenti se dodaju redom prvog pojavljivanja,
-bez duplikata. Page settings ostaju metapodaci, bez generisanja elemenata.
+The working source resolves current, nondeleted blocks and components through filtered model queries. Decoded content and resolved components are cached for one conversion call; each instance receives an independent tree. Public rendering adds a separate latest-published-component policy, described in [Public pages](public-pages.md). Ordinary snapshot conversion retains the recorded manifests.
 
-Stilovi podržavaju `base`, `tablet`, `mobile` objekte sa CSS imenima svojstava
-i string/broj vrednostima pojedinačnih deklaracija. Svaka upotreba stilizovanog
-bloka dobija determinističku klasu prema namespace-u i punoj putanji instance,
-nezavisno od URPC UID-ja. Responsive pravila koriste `max-width` u pikselima,
-redosledom tablet pa mobile; potrebne širine mora da prosledi aplikacija.
-Nepoznate grupe i neispravne deklaracije izazivaju grešku.
+### Input, assets and styles
 
-U trenutnom Quill kodu ne postoje bindings resolver, trusted QuillSetting
-registry ni validate/apply ugovor. `QuillBlockFeatures` zato prihvata prazne
-objekte, a za neprazne `bindings` i `custom_settings` prijavljuje nedostajuću
-integraciju sa putanjom i identifikatorom bloka. `definition_key` je metapodatak,
-nikada ime klase za instanciranje. Nema izmišljene normalizacije ili dvostruke
-primene settings transformacije. `kind=override` i page `source_type=urpc`
-zahtevaju poseban override pipeline i ovde daju konkretnu grešku.
+Input requires `schema_version: 1`, ordered `sections` and integer ID references. The initial `{}` stored by the creation controller is incomplete and fails direct conversion because it lacks `schema_version`; the editor and public page provider handle new empty documents separately. Section names must be unique and nonnumeric because URPC stores them as PHP array keys.
 
-Provera:
+Assets are ordered lists of nonempty strings in `styles` and `scripts`. Component assets are appended in first-use order without duplicates. Page settings remain metadata; supported page styles generate CSS without adding page elements.
 
-```sh
-php tests/conversion.php
-php tests/urpc_to_quill.php
-php tests/save.php
-```
+Style maps use CSS property names and string/number declaration values. The converter supports responsive and state scopes used by the editor. Each styled block instance receives a deterministic class based on its namespace and full instance path, independently of its URPC UID. Responsive CSS needs breakpoint configuration; the standalone converter supplies no default widths. Unknown scopes and invalid declarations are rejected. See [Editor](editor.md) for viewport/state semantics and detached component breakpoint metadata.
 
-Test konverzije koristi stvarne modele, SQLite i URPC API/loader. Putanje se mogu
-podesiti preko `AWT_FRAMEWORK_CLASSES` i `URPC_PACKAGE_ROOT` (direktorijum koji
-sadrži `URPC/api`). Test pokriva tekst bez escaping-a, zaključane blokove,
-rekurziju i redosled, više sekcija, komponente i njihove CSS instance, cikluse,
-dubinu, tačne snapshot manifeste i nedostajuće revizije, JSON tipove, assets,
-stilove i nedostajuće integracije, override i neispravan ulaz. Izvoz jedne sekcije
-zaista se učitava postojećim URPC loaderom; renderer se ne izvršava.
+There is no bindings resolver or trusted QuillSetting validate/apply registry in this pipeline. `QuillBlockFeatures` accepts empty `bindings` and `custom_settings` objects and reports missing integration, including the block path and identity, for nonempty values. `definition_key` is metadata, never a class name to instantiate. `kind=override` and page `source_type=urpc` require a separate override pipeline and produce explicit errors here.
 
 ## URPC → Quill
 
-`UrpcToQuillConverter` prihvata `IURPCDocument` preko njegovih getter metoda.
-Vraća paket podataka u memoriji: Quill dokument, zasebne blok dokumente i
-mapu originalnih URPC identiteta. Nema pristup bazi, ne učitava modele i ne
-poziva `saveModel()`, loader, renderere ili processore.
+`UrpcToQuillConverter` reads `IURPCDocument` through its getters and returns an in-memory result containing a Quill document, separate block documents and original URPC identities. It does not access the database, load models or invoke `saveModel()`, loaders, renderers or processors.
 
 ```php
 use Quill\services\conversion\urpcToQuill\UrpcToQuillConverter;
@@ -122,7 +86,7 @@ use URPC\api\URPCBlockDescriptor;
 use URPC\api\URPCDocument;
 
 $heading = new URPCBlock(new URPCBlockDescriptor('h1', [], '', 'Application/page/1'));
-$heading->setBlockContent('Naslov');
+$heading->setBlockContent('Heading');
 $document = new URPCDocument();
 $document->addBlock('main', $heading);
 
@@ -140,55 +104,37 @@ $blockJson = $result->serializeBlock(1);
 `$blockJson`:
 
 ```json
-{"schema_version":1,"kind":"element","descriptor":{"name":"h1","props":{},"renderer":""},"attributes":{},"content":"Naslov","children":[],"styles":{"base":{},"tablet":{},"mobile":{}},"bindings":{},"custom_settings":{},"editor":{"label":"h1","locked":false}}
+{"schema_version":1,"kind":"element","descriptor":{"name":"h1","props":{},"renderer":""},"attributes":{},"content":"Heading","children":[],"styles":{"base":{},"tablet":{},"mobile":{}},"bindings":{},"custom_settings":{},"editor":{"label":"h1","locked":false}}
 ```
 
-`$result->blocks` je mapa `lokalni ID => stdClass blok`, a
-`$result->identities` mapa `lokalni ID => ['uid' => ..., 'source_key' => ...]`.
-Originalni UID ostaje neizmenjen, uključujući prazan UID. Lokalni ID-jevi
-počinju od 1 pri svakom pozivu i označavaju isključivo reference u ovom rezultatu.
-**Nisu database ID-jevi i paket nije upis u bazu.** Eventualni budući servis za
-čuvanje mora dodeliti stvarne database ID-jeve i premapirati sve reference
-sekcija i dece. Polje `urpc_uid` postojećeg modela može dobiti odgovarajući UID
-iz odvojene mape tek u takvom zasebnom toku.
+`$result->blocks` maps local IDs to `stdClass` blocks. `$result->identities` maps local IDs to `['uid' => ..., 'source_key' => ...]`. Original UIDs, including empty UIDs, remain unchanged. Local IDs start at 1 on each call and identify references only within that result. **They are not database IDs.** A persistence service must allocate real IDs and remap section and child references; it may then populate the model's `urpc_uid` from the identity map.
 
-Blokovi se obilaze redosledom sekcija, korena i dece. Svako pojavljivanje istog
-URPC objekta dobija zaseban lokalni ID i duboko kopirane JSON podatke.
-Ciklusi se proveravaju po aktivnoj putanji objekata; ponovna upotreba u drugoj
-grani nije ciklus. Greška uključuje sekciju, putanju i postojeći UID bloka,
-odnosno `unassigned` kada UID nije dodeljen. Podrazumevana maksimalna dubina
-blokova je 128 i može se zadati konstruktoru.
+Traversal follows section, root and child order. Repeated uses of one URPC object receive separate local IDs and deeply copied JSON data. Cycle detection follows the active object path; reuse in a different branch is allowed. Errors identify the section, path and existing UID, or `unassigned`. The default maximum block depth is 128 and can be configured in the constructor.
 
-Descriptor, props, attributes i tekst ostaju strukturni podaci bez escaping-a.
-Props se ne pretvaraju u HTML atribute, renderer string se ne izvršava, a
-konverter ne izračunava nove URPC UID-jeve. Prazni map objekti i nizovi, kao i
-ugnježdeni JSON tipovi ostaju različiti. Podaci moraju biti JSON kompatibilni;
-resursi, proizvoljni PHP objekti, ciklični props i neispravan UTF-8 daju grešku.
+Descriptors, props, attributes and text remain unescaped structural data. Props do not become HTML attributes, renderer strings are not executed, and no new UIDs are calculated. Empty objects and arrays remain distinct. Input must be JSON-compatible; resources, arbitrary PHP objects, cyclic props and invalid UTF-8 are rejected.
 
-URPC dokument ne sadrži Quill registry definicije, komponente, bindings,
-strukturisane responsive stilove, assets ili page settings. Uvoz zato pravi
-obične `kind=element` blokove, ostavlja odgovarajuće mape praznim i ne izmišlja
-`definition_key`. Postojeće klase i inline style atributi ostaju atributi;
-konverter ne parsira CSS u Quill style mape. Ovo je strukturni uvoz, bez
-rekonstrukcije Quill komponenti ili override pipeline-a.
+URPC does not contain Quill registry definitions, component references, bindings, structured responsive styles, assets or page settings. Import creates ordinary `kind=element` blocks, leaves the corresponding maps empty and does not invent a `definition_key`. Existing classes and inline styles remain attributes; CSS is not parsed into Quill style maps. Import does not reconstruct components or an override pipeline.
 
-JSON ulaz podržava isti servis:
+### JSON input
+
+The same converter accepts either a URPC loader wrapper or Quill transport with full blocks:
 
 ```php
 $converter = new UrpcToQuillConverter();
-$result = $converter->convertJson('{"blocks":[{"descriptor":{"name":"p"},"content":"Tekst"}]}', 'main');
-// Ili Quill transport sa sekcijama, koji izvozi UrpcJsonSerializer:
+$result = $converter->convertJson('{"blocks":[{"descriptor":{"name":"p"},"content":"Text"}]}', 'main');
 $result = $converter->convertJson('{"schema_version":1,"sections":[{"name":"main","blocks":[]}]}');
 ```
 
-Prvi format je izvorni omotač URPC loadera. Drugi je Quill transport sa potpunim
-blokovima u sekcijama, ne Quill dokument sa ID referencama. Nepoznata transport
-polja se odbijaju da se podaci ne bi tiho izgubili. Ovi JSON formati ne nose
-originalni URPC UID/source key; za očuvanje tih vrednosti prosledi se PHP
-`IURPCDocument`. JSON reader čuva ugnježdene tipove direktno i ne koristi
-postojeći loader koji bi dodelio UID-jeve.
+The second format is the transport exported by `UrpcJsonSerializer`, not a stored Quill document containing ID references. Unknown transport fields are rejected to avoid silent data loss. Neither JSON format carries original URPC UIDs/source keys; pass an `IURPCDocument` to preserve them. The JSON reader preserves nested types without using a loader that would assign UIDs.
 
-`tests/urpc_to_quill.php` radi bez baze i framework bootstrap-a. Koristi stvarne
-URPC klase i oba konvertera za povratnu konverziju. Pokriva sekcije i redosled,
-lokalne reference, originalne UID-jeve, neizvršavanje processora, duboke kopije,
-oba JSON ulaza, `{}`/`[]`, validaciju, cikluse, dubinu i izolaciju poziva.
+## Verification
+
+```sh
+php tests/conversion.php
+php tests/urpc_to_quill.php
+php tests/save.php
+```
+
+The conversion suite uses real models, SQLite and the URPC API/loader. `AWT_FRAMEWORK_CLASSES` and `URPC_PACKAGE_ROOT` override checkout paths. It covers recursion, ordering, sections, components, CSS instances, cycles/depth, snapshot manifests, JSON types, assets, unsupported integrations and invalid input. The section export is loaded by the real URPC loader without rendering.
+
+The reverse-conversion suite needs neither a database nor framework bootstrap. It checks local references, original identities, processor isolation, deep copies, both JSON formats, validation and round trips through the real URPC classes and converters.

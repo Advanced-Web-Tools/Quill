@@ -6,12 +6,11 @@
         <div class="container">
             <div class="quill-dashboard-topbar">
                 <div class="quill-dashboard-brand">
-                    <span class="quill-dashboard-mark" aria-hidden="true"><i class="fa-solid fa-feather-pointed"></i></span>
-                    <div><span class="quill-dashboard-product">AWT Quill</span><span class="quill-dashboard-caption">Your publishing workspace</span></div>
+                    <div><span class="quill-dashboard-product">Your publishing workspace</span></div>
                 </div>
                 <div class="quill-dashboard-primary">@yield("quill_action")</div>
             </div>
-            <nav class="quill-dashboard-tabs" aria-label="Quill">
+            <nav class="nav-tabs quill-dashboard-tabs" aria-label="Quill">
                 <a href="/dashboard/quill" aria-current="{{ $tab === 'Pages' ? 'page' : 'false' }}"><i class="fa-regular fa-file-lines" aria-hidden="true"></i>Pages</a>
                 <a href="/dashboard/quill/components" aria-current="{{ $tab === 'Components' ? 'page' : 'false' }}"><i class="fa-solid fa-cubes" aria-hidden="true"></i>Components</a>
                 <a href="/dashboard/quill/templates" aria-current="{{ $tab === 'Templates' ? 'page' : 'false' }}"><i class="fa-regular fa-clone" aria-hidden="true"></i>My templates</a>

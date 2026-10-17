@@ -82,5 +82,3 @@ No migrations are required. These registries do not replace the existing editor 
 ## Connect data layout
 
 The Connect data panel now gives grid tracks and controls explicit shrinkable bounds, wraps long labels/routes and constrains radio fieldsets. The same rules apply to the rich-text connection popup; content composition and query behavior are unchanged.
-
-Validation: tests were not run, as requested.

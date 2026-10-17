@@ -1,6 +1,7 @@
 # Named local and global color palettes
 
-**Page settings → Styling → Color palettes** manages named collections. A page
+**Color palettes** in the editor rail manages named collections. The palette
+manager is also available through the page styling controls. A page
 can have several local palettes and can choose colors from the global library.
 New palettes are **local**. Each collection has a name and named solid/alpha
 colors or gradients. Color names must be unique within that collection; the same

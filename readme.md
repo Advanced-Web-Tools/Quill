@@ -1,81 +1,78 @@
-# Quill za AWT CMS
+# Quill for AWT CMS
 
-Quill je JSON page/component editor sa privatnim instancama blokova, revizijama, draft/publish tokom, Dashboard ekranom i samostalnim iframe editorom.
+Quill is a visual page and component editor for AWT 27. It stores structured JSON documents and renders public pages through URPC. The package includes a standalone editor, reusable components, revision snapshots, draft/publish workflows, database routes, shared animations and color palettes.
 
-- Dashboard: `/dashboard/quill` — Pages, Components, Routes.
-- Editor: `/quill/editor?type=page&id=…` ili `type=component`. Bez `id` otvara novi dokument.
-- Postojeća URPC stranica: `/quill/editor?type=page&source_key=Package%3Apage`.
+## Getting started
 
-Jedina direktna paketna zavisnost je Dashboard. Framework služi za DB transakcije, ObjectFactory, događaje, rutiranje, View/Response i CSRF. Quill ne poziva URPC loader/renderer, ThemeEngine niti admin API.
+Install Quill through the AWT package installer, then open **Dashboard → Quill** at `/dashboard/quill`. Create a page or component there before editing and saving it.
 
-## Integracija sa CMS-om
+- Page editor: `/quill/editor?type=page&id=1`
+- Component editor: `/quill/editor?type=component&id=1`
 
-Quill koristi postojeću Dashboard prijavu. `DashboardControllerBase` obezbeđuje autentifikacioni tok i navigaciju, a Dashboard `WidgetAuthentication` proverava stvarni framework session token i daje identitet autora. Pravo pristupa imaju permission nivoi 0 i 1, kao na Quill stavci Dashboard navigacije. Neprijavljeni korisnik se preusmerava na `/dashboard/login`; API zahtevi bez važeće sesije ili prava se odbijaju. Dodatni authentication listener nije potreban.
+Omitting `id` opens an empty editor; saving requires an existing page or component. The dashboard also provides route management, personal templates, version history and access to resources supplied by other packages.
 
-Rute koriste stvarni framework `RouterManager`, runtime registar i `SegmentPathMatcher`; dodatni route-inventory adapter nije potreban.
+Quill uses the existing Dashboard login and framework authentication, routing, database and event services. Dashboard is the dependency declared in the package manifest; public rendering and document conversion use the URPC API available in the AWT installation.
 
-Za javni PHP prikaz spoljni integrator sluša `quill.page.ready`, eksplicitno konvertuje sekcije JSON transporta i može postaviti `PageReadyEvent::setPublicResponse($html)`. Dok integrator nije povezan, javni endpoint vraća JSON transport. Za postojeće URPC stranice potreban je poseban `before_render` bridge opisan u ugovorima.
+## Documentation
 
-Detalji, payload-i, dozvole i ograničenja: [docs/contracts.md](docs/contracts.md).
+| Guide | Contents |
+| --- | --- |
+| [Editor](docs/editor.md) | Blocks, responsive styles, components, actions, saving and preferences |
+| [Connect data](docs/connect-data.md) | Database mappings, route parameters, collections and visual query filters |
+| [Animation Studio](docs/animation-studio.md) | Isolated keyframe editing and the shared animation library |
+| [Color palettes](docs/color-palettes.md) | Named local/global palettes, defaults and extension APIs |
+| [Editor extensions](docs/editor-extensions.md) | PHP registries, JavaScript controls and the editor API |
+| [Document conversion](docs/conversion.md) | Quill ↔ URPC conversion, JSON formats and snapshot resolution |
+| [Public pages](docs/public-pages.md) | URPC rendering, published content and custom document providers |
+| [External resources](docs/external-resources.md) | Package-provided pages, components, palettes and runtime document replacement |
+| [Editor design](docs/editor-redesign.md) | Theme tokens, control organization and design validation history |
+| [Dashboard design](docs/dashboard-design.md) | Dashboard styling, navigation and search |
 
-## Provera
+## Installation and updates
 
-Zahtevi: PHP 8.2+, PDO SQLite za testove; AWT 27 checkout. Na ovom rasporedu direktorijuma framework se pronalazi automatski.
+The AWT installer invokes `Quill/install.php`; updates invoke `Quill/update.php`. Both run `Quill\services\Migration` with the package ID. The migration uses framework `TableWizard` and `ColumnCreator` APIs to create missing tables and add missing columns, including snapshot manifests, `quill_animation` and `quill_color_palette`.
 
-```sh
-php tests/run.php
-php tests/auth.php
-php tests/schema.php
-# Ako je framework na drugom mestu:
-AWT_FRAMEWORK_ROOT=/putanja/do/Advanced-Web-Tools-Framework php tests/run.php
+Runtime integration lives in `Quill/runtime`, controllers in `Quill/controllers`, and application services in `Quill/services`. Public pages render through `PublicPageController`; see the [public rendering contract](docs/public-pages.md).
 
-find Quill examples tests tools -name '*.php' -print0 | xargs -0 -n1 php -l
-```
+## Development checks
 
-Browser test koristi pravi editor, controller i SQLite skladište, sa stvarnom Dashboard login akcijom i izdvojenim testnim nalogom:
+PHP checks require PHP 8.2+, PDO SQLite, an AWT 27 framework checkout, Dashboard and URPC. The test scripts use the conventional sibling checkout layout. Set `AWT_FRAMEWORK_CLASSES` to the framework's `awt_src/classes` directory and `URPC_PACKAGE_ROOT` to the directory containing `URPC/api` when those checkouts are elsewhere.
 
-```sh
-QUILL_TEST_DB=/tmp/quill-browser-check.sqlite php -S 127.0.0.1:8765 tests/server.php
-# U drugom terminalu otvorite:
-# http://127.0.0.1:8765/tests/browser.html
-```
-
-Automatski u Chrome-u:
+Run focused integration checks from the repository root:
 
 ```sh
-google-chrome --headless --disable-gpu --disable-dev-shm-usage \
-  --virtual-time-budget=18000 --dump-dom \
-  http://127.0.0.1:8765/tests/browser.html > /tmp/quill-browser-result.html
-# Uspeh: <body data-result="passed"> i "All browser checks passed."
+php tests/save.php
+php tests/editor_save.php
+php tests/conversion.php
+php tests/urpc_to_quill.php
+php tests/public_page.php
 ```
 
-U izolovanom/root okruženju Chrome može zahtevati `--no-sandbox`. Testni server ne postavljati na javni host. Testovi ne koriste niti menjaju CMS bazu.
-
-## Instalacija i migracije
-
-AWT installer poziva `Quill/install.php`; update hook je `Quill/update.php`. `Schema::install($packageId)` koristi framework `TableWizard`, `ColumnCreator`, `TableRegistry` i `TableSchemaProvider`. Tabele i kolone se registruju uz ID paketa; prethodno kreirane neregistrovane Quill tabele preuzimaju se bez brisanja ili menjanja sadržaja. Jedino kompozitna ograničenja, za koja TableWizard nema API, koriste dopunski DDL kroz TableSchemaProvider. Podržane su SQLite i MySQL 8/InnoDB šeme. SQLite migracija je izvršena u testovima; MySQL migracija zahteva proveru na ciljnom MySQL serveru.
-
-SQL za pregled/regeneraciju:
+For example, override the framework location with:
 
 ```sh
-php tools/schema.php sqlite > Quill/migrations/001.sqlite.sql
-php tools/schema.php mysql > Quill/migrations/001.mysql.sql
+AWT_FRAMEWORK_CLASSES=/path/to/Advanced-Web-Tools-Framework/awt_src/classes php tests/save.php
 ```
 
-Za postojeći build alat, uz lokalni `build/dev_env.json`:
+Browser checks require Chrome, Python 3 and the Python `websockets` package. They start a local fixture server and use a temporary browser profile. Set `CHROME_BIN` if Chrome is not found automatically.
+
+```sh
+python3 tests/editor_browser.py --screenshot /tmp/quill-editor.png
+python3 tests/editor_save_controls_browser.py
+```
+
+PHP integration checks use isolated test databases. Browser save responses use fixtures; the PHP suites verify actual persistence, conflicts and rollback. Each feature guide lists its focused checks. Check PHP syntax with:
+
+```sh
+find Quill tests -name '*.php' -print0 | xargs -0 -n1 php -l
+```
+
+## Building
+
+With a local `build/dev_env.json` configured for the existing build tool, create a package archive without installing it:
 
 ```sh
 bash build.sh --no-install
 ```
 
-Ova komanda samo pakuje ZIP; ne instalira ga na CMS. Runtime implementacije su u `Quill/runtime`, controller-i u `Quill/controllers`, domenska logika u `Quill/service`. Primeri spoljnog QuillSetting/data/assets paketa su u `examples/Example` i nisu automatski aktivirani.
-
-Coloris 0.25.0 i njegova MIT licenca su lokalno uključeni u `Quill/views/assets/vendor`; editor nema npm/build zavisnost. Google Fonts učitava samo porodice/težine korišćene u dokumentu, uz sistemski fallback.
-
-## Shared animation and palette libraries
-
-The editor supports a database-backed [animation library](docs/animation-studio.md)
-and [named local/global palettes](docs/color-palettes.md). Package install/update
-runs `Quill/services/Migration.php`, including `quill_animation` and
-`quill_color_palette`. New library resources persist immediately; page animation
-references, local palettes and default-palette choices use the normal Save flow.
+Coloris 0.25.0 and its MIT license are bundled in `Quill/views/assets/vendor`; the editor requires no npm build. Font Awesome uses the configured CDN stylesheet. Google Fonts loads only the families and variants used by the document, with system-font fallback. Refresh the local font metadata catalog with `python3 build/sync-google-fonts.py` when network access is available.

@@ -1,15 +1,13 @@
 # Quill 1.0.0
 
-JSON page/component builder za AWT 27, sa samostalnim editorom, privatnim instancama blokova, revizijama, draft/publish stanjem, rutama i URPC override ugovorom.
+Quill is a visual JSON page and component editor for AWT 27, with reusable components, revision snapshots, draft/publish workflows, database routes, animations and color palettes. Public pages render through URPC.
 
-Dashboard ulaz: `/dashboard/quill`. Samostalni editor: `/quill/editor?type=page` ili `type=component`; postojeći dokument dodaje `id`.
+Open `/dashboard/quill` to create and manage pages, components, routes and personal templates. Edit an existing document at `/quill/editor?type=page&id=1` or `/quill/editor?type=component&id=1`. Saving requires an existing page or component.
 
-Quill koristi postojeću Dashboard prijavu i `DashboardControllerBase` za ulaz i navigaciju. Autori dolaze iz stvarne Dashboard sesije; dozvoljeni su permission nivoi 0 i 1. Neprijavljeni korisnik ide na `/dashboard/login`. Dodatni auth/route adapteri nisu potrebni. Za javni URPC PHP prikaz i dalje se koristi spoljni `quill.page.ready` integrator.
+The package uses Dashboard's existing login and framework services. Installation and updates run `services/Migration.php` through the AWT package hooks, creating missing tables and adding missing columns with the framework's schema APIs.
 
-Kompletni JSON ugovori i ograničenja su u [docs/contracts.md](docs/contracts.md). Primeri spoljnog QuillSetting-a i data/assets listenera nalaze se u `examples/` izvornog repozitorijuma, izvan runtime paketa.
+Shared component instances are edited in their source component editor. Publishing a component updates its published appearance on host pages; component drafts remain private. Local blocks support nested editing, drag and drop, Undo/Redo, responsive styles, CSS states, actions and connected data.
 
-Installer/update hook koristi framework TableWizard/ColumnCreator i TableRegistry sa stvarnim packageId; postojeće Quill podatke preuzima bez brisanja. SQL migracije su u `migrations/`; SQLite šema i editor provereni su integracionim i Chrome testovima. MySQL migracija zahteva proveru na ciljnom serveru.
+Coloris 0.25.0 and its MIT license are bundled in `views/assets/vendor`. Google Fonts loads only the families and variants used by the document, with system-font fallback.
 
-Source URPC editor podržava provider-om dozvoljeni tekst/atribute i ručno povezivanje nestalih UID-jeva. Strukturni slot UI nije izložen. Quill-owned dokumenti podržavaju hijerarhijsko uređivanje, drag-and-drop, komponente, Undo/Redo i responsive inspector.
-
-Coloris 0.25.0 je uključen uz MIT licencu u `views/assets/vendor`. Google Fonts se učitava po korišćenim porodicama/težinama, uz sistemski fallback.
+For complete guides and development checks, use the source checkout: start with the top-level `readme.md` and its documentation index. The `docs/` directory belongs to the source repository and is not included in this runtime package.

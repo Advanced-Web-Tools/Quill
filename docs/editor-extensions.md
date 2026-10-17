@@ -1,23 +1,17 @@
-# Ekstenzije Quill editora
+# Quill editor extensions
 
-Editor pri svakom otvaranju pravi nove registre i šalje dva događaja preko
-postojećeg AWT EventDispatcher-a. Ugrađene definicije registruje listener istih
-događaja pre ekstenzija, na kopiji dispatcher-a ograničenoj na ovaj poziv:
+Each editor request creates fresh registries and dispatches two events through the existing AWT event dispatcher. Built-in definitions are registered before extensions on a dispatcher copy scoped to that request.
 
-| Događaj | Vrednost u `bundle()` | Tip |
+| Event | `bundle()` entry | Type |
 | --- | --- | --- |
 | `quill.editor.blocks.request` | `blockRegistry` | `Quill\api\editor\BlockRegistry` |
 | `quill.editor.properties.request` | `propertyRegistry` | `Quill\api\editor\PropertyRegistry` |
 
-Listener menja isti registry objekat koji je prosleđen događaju. Povratni niz
-listener-a nije katalog. Oba registra imaju `add($definition, $replace = false)`,
-`get($key)`, `remove($key)` i `all()`. Duplikat bez eksplicitnog replace-a daje
-grešku. Ekstenzije mogu ukloniti ili zameniti i podrazumevane definicije.
+Listeners mutate the registry object supplied by the event; their returned arrays are not catalogs. Both registries expose `add($definition, $replace = false)`, `get($key)`, `remove($key)` and `all()`. Duplicate keys require explicit replacement. Extensions may also replace or remove built-in definitions.
 
-## Registracija blokova
+## Registering blocks
 
-Primer u runtime-u drugog paketa, gde je `$this->eventDispatcher` stvarni
-aplikacioni dispatcher:
+Register a listener in your package runtime, where `$this->eventDispatcher` is the application dispatcher:
 
 ```php
 use event\interfaces\IEvent;
@@ -42,20 +36,11 @@ $this->eventDispatcher->addListener(EditorBlocksRequestEvent::NAME, new class im
 });
 ```
 
-`content` prihvata `IURPCBlock`, `IURPCDocument` ili JSON string u postojećem
-`{"blocks":[...]}` formatu odnosno transportu sa sekcijama. Koristi se stvarni
-`UrpcToQuillConverter`; definicija se ne renderuje, processori se ne izvršavaju,
-a izvorni objekti i UID-jevi ostaju neizmenjeni. Više korena se ubacuje redom,
-unutar odabranog elementa ili sekcije. Svaka instanca dobija nezavisnu kopiju
-celog stabla i props podataka.
+`content` accepts an `IURPCBlock`, an `IURPCDocument`, or JSON in the existing `{"blocks":[...]}` format or section transport. The real `UrpcToQuillConverter` imports the definition without rendering, running processors or changing source objects/UIDs. Multiple roots are inserted in order into the selected element or section. Every instance receives independent tree and props copies.
 
-Blokovi se prikazuju kao kartice u kategorijama levog panela. `icon` su
-Font Awesome klase (npr. `fa-solid fa-address-card`); prazna ili nepodržana
-vrednost dobija `fa-solid fa-cube` placeholder. Opis je tooltip. Opciona
-`category` ima podrazumevanu vrednost `Basic`; pretraga obuhvata i opis/kategoriju.
-Ključ definicije prenosi se u Quill `definition_key`, a ime u editor label.
+The picker groups block cards by category. `icon` contains Font Awesome classes, such as `fa-solid fa-address-card`; empty or unsupported values fall back to `fa-solid fa-cube`. The description appears as a tooltip. `category` defaults to `Basic`; search includes descriptions and categories. The definition key becomes Quill's `definition_key`, and the name becomes the editor label.
 
-## Registracija podešavanja
+## Registering property controls
 
 ```php
 use event\interfaces\IEvent;
@@ -86,37 +71,23 @@ $this->eventDispatcher->addListener(EditorPropertiesRequestEvent::NAME, new clas
 });
 ```
 
-Kategorije postaju tabovi. Više definicija može pripadati istoj kategoriji.
-`elements` je uređena lista module URL-ova ili `PropertyElement` objekata.
-Opcioni `PropertyDefinition::$icon` su Font Awesome klase za tab kategorije;
-ako nije zadat ili nije podržan, editor koristi `fa-solid fa-sliders`.
+Categories become inspector tabs, and several definitions may share one category. `elements` is an ordered list of module URLs or `PropertyElement` objects. The optional category icon uses Font Awesome classes and falls back to `fa-solid fa-sliders`.
 
-Condition definicije važi za celu grupu; condition elementa važi samo za taj
-element. `null` condition znači da se podešavanje primenjuje na svaki izabrani
-blok. Bez selekcije nema property kontrola.
+A definition condition applies to its whole group; an element condition applies only to that element. A `null` condition matches every selected block. No selection means no property controls.
 
-Module URL mora pokazivati na `.js`/`.mjs` ES module, opciono sa query stringom.
-Koristi browser URL, na primer `/awt_packages/...`, a ne lokalnu filesystem
-putanju. Module iz drugog origin-a mora isporučiti server koji podržava CORS.
-Katalog dolazi iz pouzdanih PHP listener-a; ne učitava se iz sačuvanog klijentskog
-dokumenta i ne koristi `eval` ili FQCN iz JSON-a.
+Module URLs must identify `.js`/`.mjs` ES modules, optionally with a query string. Supply browser URLs such as `/awt_packages/...`, not filesystem paths. Cross-origin modules require CORS support. The catalog comes from trusted PHP listeners, not saved client documents; it does not evaluate code or instantiate class names from JSON.
 
-`is-card.js`:
+Example `is-card.js`:
 
 ```js
 export default block => block?.definition_key === 'MyTheme:card';
 ```
 
-Condition dobija kopiju Quill bloka sa `schema_version`, `kind`,
-`definition_key` kada postoji, descriptor-om, attributes, content, children,
-styles, bindings, custom_settings i editor metapodacima. Children su potpuni
-blokovi iz stanja platna, a ne database ID-jevi. Drugi argument je zajednički
-editor API. Dozvoljen je i `Promise<boolean>`; svaki drugi rezultat je jasna
-greška. Condition treba da bude čista funkcija bez menjanja editor stanja.
+Conditions receive a copied Quill block with `schema_version`, `kind`, optional `definition_key`, descriptor, attributes, content, children, styles, bindings, custom settings and editor metadata. Children are full canvas-state blocks, not database IDs. The second argument is the shared editor API. Return a boolean or `Promise<boolean>`; other results are errors. Conditions should be pure functions.
 
-## JS definicija kontrole
+## JavaScript control lifecycle
 
-`card-spacing.js`:
+Example `card-spacing.js`:
 
 ```js
 export default function ({ container, editor, signal }) {
@@ -148,53 +119,40 @@ export default function ({ container, editor, signal }) {
 }
 ```
 
-Default export je mount funkcija i može biti asinhrona. Dobija container,
-editor i AbortSignal. Može vratiti `{update, destroy}`, samo cleanup funkciju,
-ili ništa. `update` dobija novi block snapshot i `{path, selectionChanged}`.
-Listener-e registruj sa `signal`; dodatne resurse oslobodi kroz `destroy`.
-Update treba da odražava stanje u UI-ju, a korisnički događaji da menjaju stanje.
+The default export is a mount function and may be asynchronous. It receives `container`, `editor` and an `AbortSignal`. Return `{update, destroy}`, a cleanup function, or nothing. `update` receives the new block snapshot and `{path, selectionChanged}`. Register listeners with `signal` and release other resources in `destroy`. Updates reflect state in the UI; user events perform mutations.
 
-Condition se proverava pri svakoj promeni selekcije, bloka ili registra. Kontrole
-se ne montiraju ponovo pri svakom unosu. Kada condition postane false, definicija
-se ukloni/zameni ili nestane selekcija, host abortira listener-e i poziva destroy.
-Zakašnjeli async rezultati ne smeju vratiti panel prethodno izabranog bloka.
-Greška pojedinačnog modula prikazuje njegov ključ, bez gašenja drugih kontrola.
+Conditions are checked when selection, blocks or registries change. Controls remain mounted during ordinary input. When a condition becomes false, a definition is removed/replaced or selection disappears, the host aborts listeners and calls `destroy`. Late asynchronous results cannot restore a previous block's panel. Module errors identify their definition key without disabling unrelated controls.
 
-## Zajednički objekat
+## Shared editor API
 
-`window.QuillEditor` je `QuillEditorApi` instance. Isto dobija svaki module kao
-`editor`, a `quill.editor.ready` browser događaj nosi ga u `event.detail.editor`.
-Prethodni `window.quillEditor` ostaje postojeći state objekat radi kompatibilnosti.
+`window.QuillEditor` is the `QuillEditorApi` instance supplied to modules as `editor`. The browser event `quill.editor.ready` exposes it as `event.detail.editor`. Legacy `window.quillEditor` remains the state object for compatibility.
 
-| API | Namena |
+| API | Purpose |
 | --- | --- |
-| `editor.state`, `editor.selectedPath` | Stanje, selekcija i lokalna revizija |
-| `editor.getDocument()` | Kopija transport dokumenta za čuvanje |
-| `editor.getBlock(path)`, `getSelectedBlock()` | Kopija Quill bloka za kontrole/conditions |
-| `editor.select(path)` | Selekcija bloka |
-| `editor.updateBlock(patch, path?)` | Validirana promena bloka i metapodataka |
-| `editor.setContent(text, path?)` | Izmena teksta |
-| `editor.setAttribute(name, value, path?)` | Izmena atributa; null ga uklanja |
-| `editor.styleViewport`, `setStyleViewport(viewport)` | Aktivni uređaj: all, desktop, tablet, mobile |
-| `editor.styleState`, `setStyleState(state)` | Nezavisno CSS stanje: default, hover, focus, focus-visible, active, disabled, checked |
-| `editor.styleScope` | Aktivna grupa deklaracija: base, mobile, hover ili npr. mobile:hover |
-| `editor.getStyleDeclarations(path?)`, `setStyleDeclarations(cssText, path?)` | Čitanje/zamena aktivne grupe deklaracija, za atomske kontrole razmaka |
-| `editor.setStyle(property, value, path?)` | Izmena/uklanjanje CSS deklaracije sa trenutnim preview-om |
-| `editor.setProps(object, path?)` | Zamena descriptor props objekta |
-| `editor.insertBlock(key, sectionIndex, parentPath?, index?)` | Nova kopija definicije na opcionom indeksu; podrazumevano na kraju |
-| `editor.blocks`, `editor.properties` | Runtime registri: add/get/remove/all; drugi argument add-a omogućava replace |
-| `editor.on(event, listener, options?)` | Subscribe; vraća unsubscribe funkciju |
-| `editor.copyStyle(path?)`, `pasteStyle(path?)`, `hasCopiedStyle` | Session-only Quill style clipboard za sve viewport grupe; paste je jedna atomska izmena |
-| `editor.duplicateBlock(path?)`, `removeBlock(path?)` | Strukturne izmene sa selekcijom, Undo i osvežavanjem platna |
-| `editor.save('draft' \| 'publish')` | Postojeći CSRF/version-aware Save tok, vraća Promise |
-| `editor.canvas`, `editor.ui` | Canvas i odvojeni UI saradnici |
+| `editor.state`, `editor.selectedPath` | State, selection and local revision |
+| `editor.getDocument()` | Copy of the transport document for saving |
+| `editor.getBlock(path)`, `getSelectedBlock()` | Copied block for controls and conditions |
+| `editor.select(path)` | Select a block |
+| `editor.updateBlock(patch, path?)` | Validated block/metadata mutation |
+| `editor.setContent(text, path?)` | Update text |
+| `editor.setAttribute(name, value, path?)` | Set an attribute; `null` removes it |
+| `editor.styleViewport`, `setStyleViewport(viewport)` | `all`, `desktop`, `tablet` or `mobile` scope |
+| `editor.styleState`, `setStyleState(state)` | `default`, `hover`, `focus`, `focus-visible`, `active`, `disabled` or `checked` |
+| `editor.styleScope` | Active declaration group, such as `base` or `mobile:hover` |
+| `editor.getStyleDeclarations(path?)`, `setStyleDeclarations(cssText, path?)` | Read/replace the active declaration group atomically |
+| `editor.setStyle(property, value, path?)` | Update/remove a CSS declaration and refresh preview |
+| `editor.setProps(object, path?)` | Replace descriptor props |
+| `editor.insertBlock(key, sectionIndex, parentPath?, index?)` | Insert a definition copy at an optional index; default is the end |
+| `editor.blocks`, `editor.properties` | Runtime `add/get/remove/all` registries; the second `add` argument enables replacement |
+| `editor.on(event, listener, options?)` | Subscribe and receive an unsubscribe function |
+| `editor.copyStyle(path?)`, `pasteStyle(path?)`, `hasCopiedStyle` | Session style clipboard; paste is one atomic edit |
+| `editor.duplicateBlock(path?)`, `removeBlock(path?)` | Structural edits with selection, Undo and canvas refresh |
+| `editor.save('draft' \| 'publish')` | Existing CSRF/version-aware save flow; returns a Promise |
+| `editor.canvas`, `editor.ui` | Canvas and UI collaborators |
 
-Mutatori podrazumevano koriste selektovani blok. Menjaju centralno stanje,
-prolaze validaciju, označavaju dokument kao izmenjen i pokreću običan preview i
-Save tok. Direktna promena kopije ili canvas DOM-a nije sačuvana izmena.
-Props ostaju props i ne pretvaraju se automatski u HTML atribute.
+Mutations default to the selected block. They validate central state, mark it dirty and use the ordinary preview/save flow. Mutating a returned copy or canvas DOM alone is not a saved edit. Props remain descriptor data and do not automatically become HTML attributes.
 
-Ako props zahtevaju poseban JS preview, ekstenzija može registrovati renderer:
+For custom props previews, register a renderer:
 
 ```js
 const unregister = editor.registerRenderer('MyTheme:card', ({ element, block }) => {
@@ -203,118 +161,58 @@ const unregister = editor.registerRenderer('MyTheme:card', ({ element, block }) 
 });
 ```
 
-Renderer je sinhron hook posle standardnog DOM mapiranja, ponovo se poziva pri
-promeni stanja i može vratiti cleanup. `unregister()` uklanja hook i osvežava
-preview. `editor.canvas.getElement(path)` daje trenutni element; DOM se može
-zameniti pri sledećem renderu. Događaji `change`, `selectionchange`, `saved` i
-`canvasrendered` dostupni su preko `editor.on`, uz opcionu signal opciju.
+Renderers run synchronously after normal DOM mapping and may return cleanup functions. They rerun on state changes. `unregister()` removes the hook and refreshes the preview. `editor.canvas.getElement(path)` returns the current element, which later rendering may replace. Subscribe to `change`, `selectionchange`, `saved` and `canvasrendered` with `editor.on`, optionally using a signal.
 
-Display/Layout/Style/Text/Heading/List/Table/Clickable/Link/Image/Icon/Advanced su obični registrovani moduli pod ključevima
-`Quill:display`, `Quill:layout`, `Quill:style`, `Quill:text`, `Quill:clickable`, `Quill:link`, `Quill:image`, `Quill:advanced`.
-Naslovi H1–H6 su zasebni blokovi, a `Quill:heading` omogućava promenu nivoa.
-`Quill:ul`, `Quill:ol` i `Quill:li` koriste standardne HTML list blokove.
-Podešavanja `Quill:list` menjaju broj stavki, tip i oznake liste, početak i smer
-numeracije, odnosno broj pojedinačne stavke. `Quill:table` je standardno stablo
-`table`/`thead`/`tbody`/`tr`/`th`/`td` sa posebnim `Quill:table` podešavanjima za
-broj redova i kolona, zaglavlje, raspored i razmak ćelija. Broj redova uključuje
-zaglavlje. Smanjivanje broja redova, kolona ili stavki uklanja poslednje elemente;
-preostali sadržaj i podešavanja ostaju sačuvani. Promene strukture su atomske
-API izmene sa Undo/Redo i standardnim Save tokom. Promena dimenzija tabela sa
-spojenim ćelijama zahteva prethodno uklanjanje spajanja.
-Svaki ima condition modul; paragraf ne dobija link ili image kontrole, a slika
-ne dobija tipografiju. Layout, Style i Display grupe proveravaju izračunati CSS prikazanog
-elementa i roditelja; flex i grid opcije se ne prikazuju istovremeno. Ne postoji zaseban hardkodovan put za njih. Stablo,
-izbor blokova, Save, registry, module loader, property lifecycle i canvas imaju
-odvojene saradnike; `quill-editor.js` ih samo povezuje.
+## Built-in modules and categories
 
-Provere: `php tests/editor_extensions.php` i `python3 tests/editor_browser.py`.
-Testovi koriste stvarne event listener-e, URPC konverziju, persistence mapper i
-Chrome sa spoljnim fixture modulima, uključujući condition i lifecycle greške.
+Built-in controls use the same registration and lifecycle as package extensions. Their keys include `Quill:layout`, `Quill:style`, `Quill:text`, `Quill:heading`, `Quill:list`, `Quill:table`, `Quill:clickable`, `Quill:link`, `Quill:image`, `Quill:icon`, `Quill:display`, `Quill:motion` and `Quill:advanced`.
 
+Layout is the first/default category, followed by Appearance and conditional content categories. Position, Motion and Advanced complete the built-in order. An available user-selected category remains active across selection changes. Custom registry order still applies.
 
-Ugrađeni action manager je `editor.ui.actions`: `open(id?, bindPath?, duplicate?)`,
-`assign(id, path?, trigger?)`, `remove(id)` i read-only `actions` getter. Definicije i veze su
-obične izmene centralnog stanja, uz Undo/Save/Publish. `QuillActions.mount(root, config)`
-instalira deklarativni event runtime i vraća cleanup funkciju; `config` sadrži
-`actions` i opciono `breakpoints`.
+| Registry/category key | Visible category and controls |
+| --- | --- |
+| `Quill:layout` / `layout` | Layout: arrangement, dimensions, linked spacing, gaps, flex/grid, item behavior, overflow and limits |
+| `Quill:style` / `style` | Appearance: paints, borders, corners, shadows and opacity |
+| `Quill:text` / `text` | Typography |
+| `Quill:clickable` / `clickable` | Interactions: events/actions and pointer preferences |
+| `Quill:display` / `display` | Position: placement, pins and transforms |
+| `Quill:motion` / `motion` | Motion: transitions and animation controls |
+| `Quill:advanced` / `advanced` | Advanced identity, attributes, props and renderer |
 
-Block toolbar je `editor.ui.blockToolbar`. `editor.ui.properties.showCategory(key)`
-asinhrono otvara odgovarajuću property kategoriju i vraća njen panel. Događaj
-`styleclipboardchange` signalizira dostupnost privatnog style clipboard-a; kopirani
-podaci se ne izlažu kroz dokument ili browser clipboard.
+`showCategory('image')` and `showCategory('clickable')` retain their toolbar behavior. Conditions keep controls relevant to the selected block. Layout/Appearance/Position inspect computed element and parent styles; flex and grid options are conditional.
 
+Heading blocks use H1–H6 and the heading control changes their level. Lists use normal `ul`/`ol`/`li` trees; controls change item count, markers, numbering start/direction and individual item values. Tables use `table`/`thead`/`tbody`/`tr`/`th`/`td`; row count includes the header. Reducing counts removes trailing items, rows or columns while preserving remaining content. Structure changes are atomic Undo/Redo edits. Resizing a table with merged cells requires removing the merges first.
 
-`editor.fonts` izlaže lokalni Google Fonts katalog i pomoćne metode `find(cssFamily)`,
-`weights(font, italic)`, `variant(font, weight, italic)`, `url(family, variants)` i
-`stylesheets(document)`. Built-in font picker koristi iste metode koje automatski
-prikupljaju canvas zavisnosti. Ekstenzije koje menjaju standardne font-family,
-font-weight i font-style deklaracije automatski koriste postojeći Save/Publish tok.
+State, canvas, selection, saving, registry loading and property lifecycle have separate collaborators. `quill-editor.js` wires them together.
 
+## Actions, fonts, palettes and routes
 
-`editor.palette.list()`, `save(name, value, id?)` i `remove(id)` čitaju/menjaju
-paletu u settings dokumenta kroz regularni Undo/Save tok. `save` bez ID-ja pravi
-novu stavku; sa ID-jem menja postojeću. Event `change` označava izmenu palete.
-`editor.palette.button({current, apply, signal, gradients, label})` vraća dugme
-za zajednički picker, uključujući čuvanje trenutne vrednosti. `current()` vraća
-CSS vrednost, a `apply(value, isGradient)` primenjuje izbor. AbortSignal zatvara
-picker kada se pripadajuća kontrola ukloni. `gradients: false` onemogućava izbor
-gradijenata na mestima koja podržavaju samo jednu CSS boju.
+`editor.ui.actions` exposes `open(id?, bindPath?, duplicate?)`, `assign(id, path?, trigger?)`, `remove(id)` and a read-only `actions` getter. Definitions and bindings are ordinary state edits with Undo/Save/Publish. `QuillActions.mount(root, config)` installs the declarative runtime and returns cleanup; `config` contains `actions` and optional `breakpoints`.
 
-`editor.routes` sadrži bootstrap listu `{path, name, parameters}` iz framework
-router registra za birače odredišta. Lista nije deo dokumenta; standardni link
-čuva konačan `href` kroz postojeći attribute API.
+`editor.ui.blockToolbar` owns the floating toolbar. `editor.ui.properties.showCategory(key)` asynchronously opens a category and returns its panel. `styleclipboardchange` signals clipboard availability; copied styles stay out of document JSON and the browser clipboard.
 
-## Inspector category organization
+`editor.fonts` exposes the local Google Fonts catalog and `find(cssFamily)`, `weights(font, italic)`, `variant(font, weight, italic)`, `url(family, variants)` and `stylesheets(document)`. Controls that change standard font declarations automatically participate in dependency collection and Save/Publish.
 
-Built-in registration order now starts with Layout, which becomes the initial/default
-category through the existing first-applicable-category behavior. Appearance follows;
-Typography and other content-specific categories remain conditional. Position, Motion,
-and Advanced finish the built-in order. An available user-selected category remains active
-across selection changes. Custom registry order and category definitions still apply.
+The legacy palette API is `editor.palette.list()`, `save(name, value, id?)` and `remove(id)`. Saving without an ID creates a color; passing an ID updates it. `change` signals palette changes. `editor.palette.button({current, apply, signal, gradients, label})` returns a shared picker button: `current()` returns the CSS value and `apply(value, isGradient)` applies the choice. Abort closes the picker when its control disappears. `gradients: false` restricts choices to solid colors.
 
-Existing registry/category keys are retained: `Quill:layout` / `layout`, `Quill:style` /
-`style`, `Quill:text` / `text` (Typography), `Quill:clickable` / `clickable` (Interactions),
-`Quill:display` / `display` (Position), and `Quill:advanced` / `advanced` (Advanced).
-`Quill:motion` / `motion` is a new normal registered module with the existing display
-condition and transition control factory. `showCategory('image')` and
-`showCategory('clickable')` retain their toolbar behavior.
+Named collection methods and global library behavior are documented in [Color palettes](color-palettes.md). Applying a swatch copies its value through the control callback.
 
-Size, linked margin/padding, overflow and size limits now render in Layout. Appearance
-retains paints, border/radius controls, shadows and opacity. Motion renders Animate
-changes and its duration/easing/delay/reset controls. The APIs, style scope, document
-properties, module lifecycle and serialization contracts are unchanged.
+`editor.routes` contains bootstrap route entries `{path, name, parameters}` from the framework registry. They are not document data; links save their final `href` through the attribute API.
 
 ## Animation editing context
 
-[Animation Studio](animation-studio.md) reuses registered visual property modules
-with an isolated adapter. Check `editor.editingContext?.type === 'animation'`
-when a custom module needs a workspace-specific hint. Read values through
-`getStyleDeclarations()` and write through `setStyle()` or
-`setStyleDeclarations()`; those callbacks target only the isolated preview and
-keyframe session. `editor.supportsProperty(property)` advertises available styles.
-Do not capture the global editor or mutate DOM/state outside the supplied context.
-Content, structural edits, normal attributes and document saving are unavailable
-in this adapter. Extension controls retain their normal editor contract elsewhere.
+[Animation Studio](animation-studio.md) reuses visual modules through an isolated adapter. Check `editor.editingContext?.type === 'animation'` for workspace-specific behavior. Read through `getStyleDeclarations()` and write through `setStyle()` or `setStyleDeclarations()`; these callbacks affect only the isolated preview and keyframe session. `editor.supportsProperty(property)` reports supported styles.
 
-Named local/global palette collections extend the existing palette button and
-flat saved-color API; see [Color palettes](color-palettes.md). Global library
-writes use explicit confirmation/versioning; applying a swatch still copies its
-value through the control's mutation callback. In Animation Studio, global palette
-resources and page defaults are read-only, while swatch selection uses the isolated
-animation adapter.
+Use the supplied context rather than capturing the global editor or mutating external DOM/state. Content, structural edits, ordinary attributes and document saving are unavailable in this adapter. Palette resources and page defaults are read-only; choosing swatches records animated property changes.
 
-Shared animation references are optional `block.animations` metadata, transported
-as `_quill.animations`; each item is `{animation_id: number, trigger: string}`.
-Use `editor.state.setAnimationBindings(path, references)` in normal editing.
-Definitions live in the database and are never copied into structural styles.
-See [Animation Studio](animation-studio.md) for library and conversion contracts.
+Shared animation references use optional `block.animations` metadata, transported as `_quill.animations`, with entries `{animation_id: number, trigger: string}`. In normal editing, use `editor.state.setAnimationBindings(path, references)`. Definitions remain database resources rather than structural styles.
 
-Connect data koristi descriptor renderer
-`Quill\services\rendering\ConnectedDataRenderer`; definicije sa sopstvenim rendererom
-ostaju izvan ove kategorije. `ConnectionRecords` je zaseban interfejs za query
-providere, dok `ModelConnectionRecords` koristi framework Model i ModelCollection.
-Vizuelni builder čuva verzionisano `descriptor.props.query` stablo filtera;
-`ConnectionQuery` ga validira, a `ConnectionQueryBuilder` proširuje framework
-builder samo za operacije koje njegov trenutni API nema. Property UI draftove
-potvrđuje kroz isti editor adapter. Detaljan contract i URPC integracija:
-[Connect data](connect-data.md).
+## Connected data
+
+Connect data uses descriptor renderer `Quill\services\rendering\ConnectedDataRenderer`; blocks with their own renderer remain outside this category. `ConnectionRecords` is the query-provider interface, and `ModelConnectionRecords` uses framework Model/ModelCollection.
+
+The visual builder stores a versioned `descriptor.props.query` filter tree. `ConnectionQuery` validates it; `ConnectionQueryBuilder` extends only operations absent from the framework builder. The property UI applies drafts through the same editor adapter. See [Connect data](connect-data.md) for descriptor contracts and URPC integration.
+
+## Verification
+
+`php tests/editor_extensions.php` and `python3 tests/editor_browser.py` exercise real event listeners, URPC conversion, the persistence mapper and Chrome fixture modules, including condition and lifecycle failures.

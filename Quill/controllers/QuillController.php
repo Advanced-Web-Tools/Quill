@@ -80,6 +80,7 @@ final class QuillController extends DashboardControllerBase
 
         $components = new QuillComponentCollection();
         $params['components'] = array_values(array_filter($components->obCollection->toArray(), static fn(QuillComponent $component): bool => $component->deleted_at === null));
+        $params['authors'] = $this->authors($params['components']);
         $params['externalComponents'] = array_map(static fn($definition) => $definition->summary(), (new \Quill\services\editor\ExternalResources())->components($this->eventDispatcher)->all());
 
         return $this->view($params);

@@ -1,6 +1,6 @@
 @extends("Quill.views.templates.quill_dashboard")
 @section("quill_action")
-    <button type="button" class="btn btn-primary" data-quill-create aria-haspopup="dialog" aria-controls="quill-create-dialog">Create new route</button>
+    <button type="button" class="btn btn-primary" data-quill-create aria-haspopup="dialog" aria-controls="quill-create-dialog"><i class="fa-solid fa-plus" aria-hidden="true"></i>Create route</button>
 @endsection
 @section("quill_content")
     <div class="quill-page-heading mb-4"><div><h1 class="mb-1">Routes</h1><p class="text-muted mb-0">Connect a web address to a page. Use parameters for dynamic content.</p></div><span class="badge badge-muted">{{ count($routes) }} {{ count($routes) === 1 ? 'route' : 'routes' }}</span></div>
@@ -16,12 +16,15 @@
                     <li class="quill-route-row" data-quill-item data-search="{{ $route->path . ' ' . ($pageNames[$route->page_id] ?? '') }}">
                         <div class="quill-route-path"><i class="fa-solid fa-route text-muted" aria-hidden="true"></i><code>{{ $route->path }}</code></div>
                         <span class="quill-route-page text-small text-muted">{{ $pageNames[$route->page_id] ?? 'No page assigned' }}</span>
-                        <button type="button" class="btn btn-ghost btn-sm" data-quill-manage="{{ json_encode(['id' => $route->getKey(), 'path' => $route->path, 'page_id' => $route->page_id, 'created_at' => $route->created_at, 'updated_at' => $route->updated_at], JSON_THROW_ON_ERROR) }}" aria-haspopup="dialog" aria-controls="quill-create-dialog" aria-label="Manage {{ $route->path }}">Manage</button>
+                        <div class="quill-route-actions">
+                            <a class="btn btn-ghost btn-sm" href="{{ $route->path }}" target="_blank" rel="noopener" aria-label="Visit {{ $route->path }} (opens in a new tab)">Visit <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
+                            <button type="button" class="btn btn-ghost btn-sm" data-quill-manage="{{ json_encode(['id' => $route->getKey(), 'path' => $route->path, 'page_id' => $route->page_id, 'created_at' => $route->created_at, 'updated_at' => $route->updated_at], JSON_THROW_ON_ERROR) }}" aria-haspopup="dialog" aria-controls="quill-create-dialog" aria-label="Manage {{ $route->path }}">Manage</button>
+                        </div>
                     </li>
                 @endforeach
             </ul>
         </section>
-        <p class="text-muted" data-quill-no-results hidden role="status">No routes match your search.</p>
+        <p class="quill-no-results" data-quill-no-results hidden role="status">No routes match your search. <button type="button" class="btn btn-ghost btn-sm" data-quill-reset-filters>Clear search</button></p>
     @else
         <div class="card empty-state">
             <div class="avatar-tile" aria-hidden="true"><i class="fa-solid fa-route"></i>

@@ -1,28 +1,18 @@
-# Public Quill stranice i URPC
+# Public Quill pages and URPC
 
-`PublicPageController` nasleđuje URPC renderer. Dinamična ruta mu preko
-`setPage()` prosleđuje Quill page model, a kontroler postavlja
-`QuillPageDocumentProvider` koristeći stvarni `setDocumentProvider()` API.
-Dokument se pravi tek tokom renderovanja, uz framework Context koji runtime
-već postavlja. Registracija ruta ne konvertuje sadržaj svih stranica.
+`PublicPageController` extends the URPC renderer. A dynamic route passes a Quill page model to `setPage()`, and the controller installs `QuillPageDocumentProvider` through `setDocumentProvider()`. The document is created during rendering, using the framework Context supplied by the runtime. Registering routes does not convert every page in advance.
 
-Provider svaki put učitava trenutno stanje stranice preko iste konekcije.
-Ako stranica ima published_snapshot_id, koristi isključivo taj snapshot i njegov
-manifest; proverava da snapshot pripada toj stranici. Ne koristi radni sadržaj
-kao fallback za nedostajući snapshot ili blok. Kasniji draft zato ne menja
-postojeći objavljeni prikaz.
+## Selecting page content
 
-Kada published_snapshot_id nije postavljen, eksplicitno povezana ruta prikazuje
-radno stanje stranice. Ovo prati postojeći uslov registracije ruta: povezana,
-neobrisana stranica, bez dodatnog status filtera. Novi page čiji je početni
-page_json jednak `{}` ima prazan prikaz. Neispravni dokumenti i nedostajući
-podaci prijavljuju preciznu grešku; ne zamenjuju se praznim prikazom.
+The provider reloads the current page through the same database connection on each render. When `published_snapshot_id` is set, it uses that snapshot and its manifests and checks that the snapshot belongs to the page. Missing snapshots or blocks do not fall back to working content. Later page drafts therefore leave the published page content unchanged.
 
-Konverzija pravi IURPCDocument i postavlja source namespace `Quill/page/{id}`.
-URPC zatim obavlja kopiranje dokumenta, dodelu UID-jeva, BeforeRenderEvent,
-processore i escaping. Kontroler dodaje stylesheet assets i generisani scoped
-CSS pre sadržaja, a script assets posle njega. Ne pravi dodatne page elemente
-iz SEO ili description podešavanja i ne menja URPC ili framework core.
+Published pages resolve shared components to their latest published versions through `PublishedComponentContentSource`. A component draft remains private. If a legacy component has no published pointer, rendering retains the component snapshot captured when the host page was published. Direct snapshot conversion, history and archives retain their original manifests.
+
+When the page has no `published_snapshot_id`, an explicitly connected route renders its working content. Route registration requires a connected, nondeleted page and applies no additional status filter. A new page whose initial `page_json` is `{}` renders empty. Invalid documents and missing data produce explicit errors rather than silently rendering empty content.
+
+## Rendering lifecycle
+
+Conversion creates an `IURPCDocument` with source namespace `Quill/page/{id}`. URPC then handles document copying, UID assignment, `BeforeRenderEvent`, processors and escaping. The controller includes stylesheet assets and generated scoped CSS before the content and script assets after it. SEO and description metadata do not create additional page elements.
 
 ```php
 use context\Context;
@@ -38,22 +28,16 @@ $controller->setPage($page, new QuillToUrpcConverter(['tablet' => 900, 'mobile' 
 $html = $controller->index()->render();
 ```
 
-Širine u primeru su konfiguracija aplikacije. Podrazumevani konverter nema
-responsive breakpoint vrednosti; kada su potrebne mora se proslediti konfigurisan
-konverter. Globalni AWT eventDispatcher i Context ostaju izvorni URPC zahtevi;
-aplikacioni runtime ih obezbeđuje.
+The breakpoint widths above are application configuration. A default converter has no responsive breakpoint values; supply a configured converter when those widths are needed. The application runtime supplies the global AWT event dispatcher and Context required by URPC.
 
-Nasleđeni `setDocument()`, `setDocumentProvider()`, `clearDocument()`,
-`getDocument()`, `setRendererFactory()` i `setSourceNamespace()` ostaju podržani.
-Direktno postavljen dokument ima prioritet nad providerom; `clearDocument()`
-ponovo aktivira odabrani provider. Direktni dokument ili spoljašnji provider
-ne dobijaju assets prethodne Quill stranice. `setPage()` bira novi page provider
-i uklanja prethodni direktni dokument. Zamena celog URPC dokumenta podržana je
-preko `PageDocumentRequestEvent`, posle Quill → URPC konverzije, pre rendera.
-Detalji i registri eksternih resursa: [external-resources.md](external-resources.md).
-Per-block override pipeline ostaje odvojen.
+## Custom documents and providers
 
-`php tests/public_page.php` izvršava stvarni renderer, događaje, processore i
-dinamičnu rutu nad modelima u izolovanoj SQLite bazi. Pokriva snapshot i radno
-stanje, assets/CSS, escaping, stabilne UID-jeve, ponovljeni render, sopstveni
-document/provider, menjanje stranice, osvežavanje podataka i greške bez fallback-a.
+Inherited `setDocument()`, `setDocumentProvider()`, `clearDocument()`, `getDocument()`, `setRendererFactory()` and `setSourceNamespace()` remain available. A directly assigned document takes precedence over a provider; `clearDocument()` reactivates the selected provider. A direct document or external provider does not inherit assets from the previous Quill page. Calling `setPage()` selects a new page provider and clears any previously assigned direct document.
+
+Use `PageDocumentRequestEvent` to replace the complete URPC document after Quill → URPC conversion and before rendering. See [External resources](external-resources.md) for the event, asset retention and resource registries. This runtime replacement is separate from saving per-block overrides.
+
+## Verification
+
+`php tests/public_page.php` exercises the real renderer, events, processors and dynamic route against models in an isolated SQLite database. Coverage includes snapshots and working content, assets/CSS, escaping, stable UIDs, repeated rendering, custom documents/providers, page switching, refreshed data and errors without fallback.
+
+`php tests/published_components.php` covers independent component publication, nested/repeated instances, draft isolation and historical snapshot preservation.

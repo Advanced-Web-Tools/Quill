@@ -29,7 +29,7 @@
 
     function openEditor(button, item = null) {
         if (busy) return;
-        opener = button;
+        opener = button.closest('.quill-card-menu')?.querySelector('summary') || button;
         managedItem = item;
         form.querySelectorAll('[data-unavailable-page]').forEach(option => option.remove());
         form.reset();
