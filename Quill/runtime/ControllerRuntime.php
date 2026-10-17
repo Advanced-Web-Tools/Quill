@@ -21,6 +21,7 @@ final class ControllerRuntime extends RuntimeControllerAPI
         parent::environmentSetup();
         $props = [
             "controllerName" => "QuillPrivateController",
+            "name" => "Quill",
             "localAssetPath" => "awt_packages/Quill/views/assets",
             "eventDispatcher" => $this->eventDispatcher,
         ];

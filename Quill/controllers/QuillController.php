@@ -16,7 +16,7 @@ use Quill\services\editor\EditorExtensionLoader;
 
 final class QuillController extends DashboardControllerBase
 {
-    public string $name;
+    public string $name = 'Quill';
     public string $navigation;
     public string $token;
     public function __construct()
@@ -29,6 +29,7 @@ final class QuillController extends DashboardControllerBase
      */
     public function index(array|string $params): View
     {
+        $params['name'] = $this->name;
         $nav = $this->buildNavigation();
         $params['navigation'] = $nav;
         $params['tab'] = 'Pages';
@@ -52,6 +53,7 @@ final class QuillController extends DashboardControllerBase
      */
     public function routes(array $params): View
     {
+        $params['name'] = $this->name;
         $nav = $this->buildNavigation();
         $params['navigation'] = $nav;
         $params['tab'] = 'Routes';
@@ -74,6 +76,7 @@ final class QuillController extends DashboardControllerBase
      */
     public function components(array $params): View
     {
+        $params['name'] = $this->name;
         $nav = $this->buildNavigation();
         $params['navigation'] = $nav;
         $params['tab'] = 'Components';
@@ -91,6 +94,7 @@ final class QuillController extends DashboardControllerBase
      */
     public function editor(array $params): View|Response
     {
+        $params['name'] = $this->name;
         $type = $params['type'] ?? 'page';
         if (!in_array($type, ['page', 'component'], true)) {
             return Response::make(404, 'Editor not found.')->data([])->asJson();
@@ -127,6 +131,7 @@ final class QuillController extends DashboardControllerBase
 
     public function templates(array $params = []): View
     {
+        $params['name'] = $this->name;
         $params['navigation']=$this->buildNavigation();$params['tab']='Templates';
         $params['templates']=(new \Quill\services\editor\PageLibrary())->templates((new \admin\Admin())->getKey());
         $params['authors']=$this->authors($params['templates']);return $this->view($params);
@@ -134,6 +139,7 @@ final class QuillController extends DashboardControllerBase
 
     public function history(array $params): View|Response
     {
+        $params['name'] = $this->name;
         $id=filter_var($params['id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $page=$id===false?null:(new QuillPage())->newQuery()->where(['id'=>$id,'deleted_at'=>null])->firstModel();
         if(!$page)return Response::make(404,'Page not found.')->data([])->asJson();
