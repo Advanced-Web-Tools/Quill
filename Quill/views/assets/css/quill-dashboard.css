@@ -1,0 +1,45 @@
+.quill-routes { padding-block: 0; }
+.quill-route-heading, .quill-route-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) 6rem; align-items: center; gap: var(--space-3); padding-block: var(--space-2); }
+.quill-route-heading { border-bottom: var(--border-width) solid var(--border); }
+.quill-route-list { list-style: none; margin: 0; padding: 0; }
+.quill-route-row + .quill-route-row { border-top: var(--border-width) solid var(--border); }
+.quill-route-path { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.quill-route-path code, .quill-route-page { overflow-wrap: anywhere; }
+.quill-route-path code { min-width: 0; }
+.quill-route-row > button { justify-self: end; }
+.quill-route-path > i { flex-shrink: 0; }
+.quill-item-info { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); padding-bottom: var(--space-3); margin-bottom: var(--space-3); border-bottom: var(--border-width) solid var(--border); }
+.quill-item-info dt { color: var(--muted); font-weight: var(--weight-medium); }
+.quill-item-info dd { margin: var(--space-half) 0 0; overflow-wrap: anywhere; }
+@media (max-width: 575px) {
+    .quill-route-heading { display: none; }
+    .quill-route-row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-1) var(--space-2); }
+    .quill-route-page { grid-column: 1; grid-row: 2; }
+    .quill-route-row > button { grid-column: 2; grid-row: 1 / 3; }
+}
+
+/* Quill additions use Dashboard tokens and reusable cards, forms, badges and buttons. */
+.quill-page-heading { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.quill-page-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 220px); gap: var(--space-2); align-items: end; }
+.quill-page-card { display: flex; flex-direction: column; min-width: 0; }
+.quill-page-card > .card-footer { margin-top: auto; }
+.quill-page-meta { display: grid; gap: var(--space-1); margin: 0; }
+.quill-page-meta > div { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(0, 1fr); gap: var(--space-2); }
+.quill-page-meta dt { color: var(--muted); font-weight: var(--weight-normal); }
+.quill-page-meta dd { margin: 0; overflow-wrap: anywhere; }
+.quill-page-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-1); }
+.quill-page-actions form { margin: 0; }
+.quill-page-actions [data-quill-feedback]:empty { display: none; }
+.quill-page-actions [data-quill-feedback] { display: block; max-width: 300px; margin-top: var(--space-half); color: var(--danger); }
+.quill-history { padding: 0; overflow: hidden; }
+.quill-history .table { margin: 0; }
+.quill-history td { vertical-align: top; }
+[data-quill-item][hidden] { display: none !important; }
+@media (max-width: 575px) {
+    .quill-page-toolbar { grid-template-columns: 1fr; }
+    .quill-page-card .quill-page-actions { align-items: flex-start; }
+    .quill-history .table { min-width: 640px; }
+}
+
+/* Quill modal headers, bodies and footers use the same Dashboard surface. */
+:is(#quill-create-dialog, #quill-delete-dialog, #quill-command-confirm) :is(.modal-header, .modal-body, .modal-footer) { background: var(--surface); }

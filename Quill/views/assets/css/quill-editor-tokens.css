@@ -1,0 +1,106 @@
+/* Shared by the editor shell and editor-only overlays inside the preview.
+   These variables never set document typography, backgrounds, or color-scheme. */
+:root {
+    --editor-bg: #242628;
+    --editor-input: #303336;
+    --editor-raised: #3b3f43;
+    --editor-workspace: #191b1d;
+    --editor-surface: #2a2d30;
+    --editor-ink: #eff1f2;
+    --editor-muted: #adb3b9;
+    --editor-line: #41464b;
+    --editor-accent: #67d6a0;
+    --editor-accent-hover: #88e3b6;
+    --editor-on-accent: #102d20;
+    --editor-selection: #78b6ff;
+    --editor-component: #c0a5ff;
+    --editor-warning: #efc277;
+    --editor-error: #ff9da7;
+    --editor-success: #79d7a6;
+    --editor-accent-soft: #67d6a018;
+    --editor-selection-soft: #78b6ff1c;
+    --editor-error-soft: #ff9da710;
+    --editor-shadow-sm: 0 2px 8px #0002;
+    --editor-shadow-lg: 0 16px 56px #0005, 0 2px 8px #0002;
+    --editor-backdrop: #10141888;
+    --editor-color-scheme: light dark;
+    --editor-weight-regular: 400;
+    --editor-weight-medium: 500;
+    --editor-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    --editor-text-caption: 10px;
+    --editor-text-xs: 11px;
+    --editor-text-sm: 12px;
+    --editor-text-md: 13px;
+    --editor-text-lg: 16px;
+    --editor-space-1: 4px;
+    --editor-space-2: 8px;
+    --editor-space-3: 12px;
+    --editor-space-4: 16px;
+    --editor-space-5: 24px;
+    --editor-radius-sm: 6px;
+    --editor-radius-md: 10px;
+    --editor-radius-lg: 16px;
+    --editor-control-height: 32px;
+    --editor-icon-size: 32px;
+    --editor-rail-width: 48px;
+    --editor-left-width: 232px;
+    --editor-right-width: 320px;
+    --editor-topbar-height: 60px;
+}
+@media (prefers-color-scheme: light) {
+    :root:not([data-editor-theme="dark"]) {
+        --editor-bg: #f8f9fa;
+        --editor-input: #eceff1;
+        --editor-raised: #e2e7eb;
+        --editor-workspace: #dce1e5;
+        --editor-surface: #ffffff;
+        --editor-ink: #242a30;
+        --editor-muted: #606a74;
+        --editor-line: #d3d9df;
+        --editor-accent: #16764e;
+        --editor-accent-hover: #105f3e;
+        --editor-on-accent: #ffffff;
+        --editor-selection: #1669ba;
+        --editor-component: #7851b8;
+        --editor-warning: #936015;
+        --editor-error: #b63748;
+        --editor-success: #16764e;
+        --editor-accent-soft: #16764e10;
+        --editor-selection-soft: #1669ba10;
+        --editor-error-soft: #b637480c;
+        --editor-shadow-sm: 0 2px 8px #20304012;
+        --editor-shadow-lg: 0 16px 56px #20304026, 0 2px 8px #20304014;
+        --editor-backdrop: #26344255;
+    }
+}
+@media (max-width: 1100px) {
+    :root { --editor-left-width: 200px; --editor-right-width: 300px; }
+}
+
+/* Explicit appearance overrides system preference in both editor documents. */
+:root[data-editor-theme="light"] {
+        --editor-bg: #f8f9fa;
+        --editor-input: #eceff1;
+        --editor-raised: #e2e7eb;
+        --editor-workspace: #dce1e5;
+        --editor-surface: #ffffff;
+        --editor-ink: #242a30;
+        --editor-muted: #606a74;
+        --editor-line: #d3d9df;
+        --editor-accent: #16764e;
+        --editor-accent-hover: #105f3e;
+        --editor-on-accent: #ffffff;
+        --editor-selection: #1669ba;
+        --editor-component: #7851b8;
+        --editor-warning: #936015;
+        --editor-error: #b63748;
+        --editor-success: #16764e;
+        --editor-accent-soft: #16764e10;
+        --editor-selection-soft: #1669ba10;
+        --editor-error-soft: #b637480c;
+        --editor-shadow-sm: 0 2px 8px #20304012;
+        --editor-shadow-lg: 0 16px 56px #20304026, 0 2px 8px #20304014;
+        --editor-backdrop: #26344255;
+    --editor-color-scheme: light;
+}
+:root[data-editor-theme="dark"] { --editor-color-scheme: dark; }
