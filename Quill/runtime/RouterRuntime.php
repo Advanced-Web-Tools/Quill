@@ -14,6 +14,7 @@ final class RouterRuntime extends RuntimeRouterAPI
         $controller = $runtime->getController('QuillPrivateController');
         $saveController = $runtime->getController('QuillSaveController');
         $this->addRouter((new Router('/dashboard/quill/external-component/{key}', 'externalEditorComponent', clone $saveController))->setMethod('GET'));
+        $this->addRouter((new Router('/dashboard/quill/open-external-component', 'openExternalComponent', clone $saveController))->setMethod('POST'));
         $this->addRouter((new Router('/dashboard/quill/import-external-page', 'importExternalPage', clone $saveController))->setMethod('POST'));
         $this->addRouter((new Router('/quill/preview/external/{key}', 'externalPreview', clone $controller))->setMethod('GET'));
         $this->addRouter((new Router('/dashboard/quill/document/{type}/{id}', 'saveDocument', clone $saveController))->setMethod('POST'));

@@ -53,10 +53,10 @@
         <div class="card empty-state"><div class="avatar-tile" aria-hidden="true"><i class="fa-solid fa-file-lines"></i></div><h2 class="h3">Your first page starts here.</h2><p>Create a blank page or start with one of your templates.</p><button type="button" class="btn btn-primary" data-quill-create aria-haspopup="dialog" aria-controls="quill-create-dialog">Create new page</button></div>
     @endif
     @if(count($externalPages ?? []) > 0)
-        <section class="quill-resource-section" data-quill-resource-section aria-labelledby="quill-other-pages">
-            <h2 id="quill-other-pages" class="h3">Other</h2>
-            <p class="text-small text-muted">Pages supplied by other packages. Create a local copy to edit without changing the original.</p>
-            <div class="card-grid">
+        <section class="quill-resource-section" data-quill-resource-section data-quill-collapsible data-collapsed aria-labelledby="quill-other-pages">
+            <h2 id="quill-other-pages" class="quill-resource-heading"><button type="button" class="quill-resource-toggle" data-quill-resource-toggle aria-expanded="false" aria-controls="quill-other-pages-description quill-other-pages-items"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i><span>Other</span><span class="quill-resource-count" data-quill-resource-count>{{ count($externalPages) }}</span></button></h2>
+            <p id="quill-other-pages-description" class="text-small text-muted">Pages supplied by other packages. Edit in Quill to save changes to individual blocks. The provider document stays unchanged.</p>
+            <div class="card-grid" id="quill-other-pages-items">
                 @foreach($externalPages as $external)
                     <article class="card quill-page-card quill-external-card" data-quill-item data-status="external" data-search="{{ $external['name'] . ' ' . $external['description'] . ' ' . $external['provider'] }}">
                         <span class="quill-resource-kind"><i class="fa-solid fa-puzzle-piece" aria-hidden="true"></i>External page</span>
@@ -65,6 +65,7 @@
                         <div class="quill-card-menu-items quill-page-actions">
                             <a class="btn btn-outline-secondary btn-sm" href="/quill/preview/external/{{ rawurlencode($external['id']) }}" target="_blank" rel="noopener">Preview <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
                             @if($external['url'])<a class="btn btn-ghost btn-sm" href="{{ $external['url'] }}" target="_blank" rel="noopener">Open page</a>@endif
+                            @if(!empty($external['overridePageId']))<a class="btn btn-ghost btn-sm" href="/dashboard/quill/page/{{ $external['overridePageId'] }}/history"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>History</a>@endif
                         </div>
                     </details>
                         <div class="quill-card-heading"><h3>{{ $external['name'] }}</h3></div>
@@ -75,7 +76,7 @@
                             <form method="post" action="/dashboard/quill/import-external-page" data-quill-command data-quill-open-editor>
                                 @csrf
                                 <input type="hidden" name="key" value="{{ $external['id'] }}">
-                                <button type="submit" class="btn btn-primary btn-sm">Create local copy</button>
+                                <button type="submit" class="btn btn-primary btn-sm">Edit in Quill</button>
                                 <p role="status" class="text-small text-muted" data-quill-feedback></p>
                             </form>
                             </div>

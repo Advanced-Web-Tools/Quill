@@ -26,3 +26,21 @@ Secondary actions (Manage, History, draft preview, live links and Save as templa
 Routes retain visible actions, with a Visit link beside Manage using `target="_blank"` and `rel="noopener"`. Narrow layouts wrap route actions beneath the route details.
 
 Validation: updated dashboard Chrome suite passed 85 checks, including menu placement, Escape/focus behavior, existing actions, route Visit/new-tab behavior and narrow route layout. Reviewed `/tmp/quill-dashboard-menus.png`.
+
+Plan integracije tema i dodatnog grupisanja eksternih resursa: [QuillThemeBridge — instrukcije](quill-theme-bridge.md).
+
+QuillThemeBridge koristi originalni URPC dokument teme i čuva samo izmenjene blokove sa izvornim `urpc_uid`; za theme stranice ne koristi Create local copy. Ovo je zahtev za bridge, ne tvrdnja da je postojeći generički import već izmenjen.
+
+
+## Source-bound external editors
+
+External pages and components now offer Edit in Quill. Their owners store sparse UID property and structural operations and have optional History links; they no longer create a local copy of the provider tree. The component picker contains insertion choices only; selected instances expose Edit in Quill above removal in Properties with a separator between those actions, and new inserted components remain published registry references. Source-bound editors keep existing property controls and show their editing context; insertion, deletion, movement and duplication use stable UID placements without modifying provider documents. See [External resources](external-resources.md) for the implemented APIs and legacy-instance behavior.
+
+Validation of source-bound editing: 53 focused PHP override checks and 149 Chrome checks (12 external editor, 85 dashboard, 21 normal interaction, 31 existing component checks) passed. Public rendering, component library, route catalog and dashboard persistence/history suites also passed. Source providers must supply original UIDs; older local copies are intentionally not guessed into references.
+
+
+External structural editing now uses Quill-owned additions with stable `quill-added:` UIDs and sparse parent/sibling placements. The ordinary inserter, duplicate/delete commands, layers drag-and-drop and inline rich-text nodes are available in source-bound editors. Provider documents remain unchanged; draft/publish and history snapshot the operation set. Missing destinations retain hidden changes with an editor warning. Bridges consume `ExternalPageOverrides::render()` rather than implementing structural patching. See [external resource contracts](external-resources.md#structural-operations).
+
+External page/component sections now start collapsed, use Font Awesome disclosure arrows and show their item counts. Search opens matching sections and restores the previous expansion state when cleared. Theme/provider category headings injected into resource grids use plain heading styling instead of inheriting Dashboard card surfaces. The editor Blocks picker contains block definitions only; saved and external components remain available through its separate Components entry.
+
+The Components picker separates saved local components from External components. The external disclosure follows Components and starts closed, expands for matching searches, and retains provider-supplied subgroups inside it.

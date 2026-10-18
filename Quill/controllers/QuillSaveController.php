@@ -58,7 +58,7 @@ final class QuillSaveController extends DashboardControllerBase
             if (!is_array($params) || !in_array($params['type'] ?? null, ['page', 'component'], true)) return $this->respond(404, 'Document not found.');
             $id = filter_var($params['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if ($id === false) return $this->respond(404, 'Document not found.');
-            if (array_diff(array_keys($_POST), ['_token', 'document', 'mode', 'lock_version'])) throw new InvalidArgumentException('Unexpected document fields.');
+            if (array_diff(array_keys($_POST), ['_token', 'document', 'mode', 'lock_version', 'source_revision'])) throw new InvalidArgumentException('Unexpected document fields.');
             $version = filter_var($_POST['lock_version'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             $json = $_POST['document'] ?? null;
             $mode = $_POST['mode'] ?? 'draft';
@@ -69,7 +69,12 @@ final class QuillSaveController extends DashboardControllerBase
             $owner = $params['type'] === 'page' ? new QuillPage() : new QuillComponent();
             $owner->selectByID($id);
             if ($owner->getKey() === null || $owner->deleted_at !== null) return $this->respond(404, 'Document not found.');
-            $result = (new EditorDocumentSaver())->save($owner, ConversionInput::decode($json, 'document'), $version, $mode, (new Admin())->getKey());
+            $input = ConversionInput::decode($json, 'document');
+            if ($owner instanceof QuillPage && $owner->source_type === 'urpc') {
+                $revision = $_POST['source_revision'] ?? null;
+                if (!is_string($revision)) throw new InvalidArgumentException('Reload the external page before saving its changes.');
+                $result = (new \Quill\services\editor\ExternalPageOverrides($this->eventDispatcher))->save($owner, $input, $version, $mode, (new Admin())->getKey(), $revision);
+            } else $result = (new EditorDocumentSaver())->save($owner, $input, $version, $mode, (new Admin())->getKey());
             return $this->respond(200, $mode === 'publish' ? 'Published.' : 'Draft saved.', $result);
         } catch (InvalidArgumentException|ConversionException|\JsonException $error) {
             return $this->respond(422, $error->getMessage());
@@ -151,9 +156,26 @@ final class QuillSaveController extends DashboardControllerBase
             $resources = new \Quill\services\editor\ExternalResources();
             $key = rawurldecode(is_array($params) ? ($params['key'] ?? '') : '');
             $definition = $resources->components($this->eventDispatcher)->get($key) ?? throw new \OutOfBoundsException('External component unavailable.');
-            return $this->respond(200, 'External component loaded.', ['component' => $definition->summary(), 'document' => $resources->document($definition, true)]);
+            return $this->respond(200, 'External component loaded.', ['component' => $definition->summary() + ['version' => (new \Quill\services\editor\ExternalPageOverrides($this->eventDispatcher))->find($definition->key,'component')?->published_snapshot_id ?? 1], 'document' => (new \Quill\services\editor\ExternalPageOverrides($this->eventDispatcher))->publishedComponentDocument($definition)]);
         } catch (\OutOfBoundsException $error) { return $this->respond(404, $error->getMessage()); }
         catch (InvalidArgumentException|ConversionException|\JsonException $error) { return $this->respond(422, $error->getMessage()); }
+    }
+
+    public function openExternalComponent(array|string $params = []): Response
+    {
+        $this->checkAuth();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') return $this->respond(405, 'Use POST.')->header('Allow', 'POST');
+        if (!(new Csrf())->validateToken($_POST['_token'] ?? null)) return $this->respond(403, 'Your session token expired. Reload and try again.');
+        try {
+            $key=$_POST['key']??null;
+            if(!is_string($key)||array_diff(array_keys($_POST),['_token','key']))throw new InvalidArgumentException('Choose an external component.');
+            $resources=new \Quill\services\editor\ExternalResources();
+            $definition=$resources->components($this->eventDispatcher)->get($key)??throw new \OutOfBoundsException('External component unavailable.');
+            $owner=(new \Quill\services\editor\ExternalPageOverrides($this->eventDispatcher))->open($definition,(new Admin())->getKey(),'component');
+            return $this->respond(200,'External component opened. Only changed UID blocks will be saved.',['editorUrl'=>'/quill/editor/page/'.$owner->getKey()]);
+        } catch(\OutOfBoundsException $error){return $this->respond(404,$error->getMessage());}
+        catch(InvalidArgumentException|ConversionException|\JsonException $error){return $this->respond(422,$error->getMessage());}
+        catch(Throwable $error){error_log('Quill external component open failed: '.$error->getMessage());return $this->respond(500,'Unable to open the external component.');}
     }
 
     public function importExternalPage(array|string $params = []): Response
@@ -166,20 +188,11 @@ final class QuillSaveController extends DashboardControllerBase
             if (!is_string($key) || array_diff(array_keys($_POST), ['_token', 'key'])) throw new InvalidArgumentException('Choose an external page.');
             $resources = new \Quill\services\editor\ExternalResources();
             $definition = $resources->pages($this->eventDispatcher)->get($key) ?? throw new \OutOfBoundsException('External page unavailable.');
-            $document = $resources->document($definition);
-            $page = new QuillPage(); $adminId = (new Admin())->getKey();
-            $id = $page->transaction(function () use ($page, $definition, $document, $adminId) {
-                $page->name = $definition->name; $page->description = $definition->description;
-                $page->admin_id = $adminId; $page->status = 'draft'; $page->source_type = 'quill';
-                $page->lock_version = 1; $page->setDocument(new \stdClass());
-                if ($page->saveModel() === null) throw new \RuntimeException('Unable to create a local copy.');
-                (new EditorDocumentSaver())->save($page, $document, 1, 'draft', $adminId);
-                return $page->getKey();
-            });
-            return $this->respond(201, 'Local draft created. The provider document is unchanged.', ['editorUrl' => '/quill/editor/page/' . $id]);
+            $page = (new \Quill\services\editor\ExternalPageOverrides($this->eventDispatcher))->open($definition, (new Admin())->getKey());
+            return $this->respond(200, 'External page opened. Only changed UID blocks will be saved.', ['editorUrl' => '/quill/editor/page/' . $page->getKey()]);
         } catch (\OutOfBoundsException $error) { return $this->respond(404, $error->getMessage()); }
         catch (InvalidArgumentException|ConversionException|\JsonException $error) { return $this->respond(422, $error->getMessage()); }
-        catch (Throwable $error) { error_log('Quill external import failed: ' . $error->getMessage()); return $this->respond(500, 'Unable to create a local copy.'); }
+        catch (Throwable $error) { error_log('Quill external import failed: ' . $error->getMessage()); return $this->respond(500, 'Unable to open the external page.'); }
     }
 
     public function detachedEditorComponent(array|string $params = []): Response
@@ -299,7 +312,7 @@ final class QuillSaveController extends DashboardControllerBase
             } else {
                 if ($delete) {
                     $changes = ['deleted_at' => date('Y-m-d H:i:s')];
-                    if ($type === 'page') $changes['status'] = 'draft';
+                    if ($type === 'page') { $changes['status'] = 'draft'; if ($model->source_type === 'urpc') $changes['source_key'] = null; }
                 } elseif ($type === 'route') {
                     $route = $this->newRoute($id);
                     $changes = ['path' => $route->path, 'page_id' => $route->page_id];
@@ -411,7 +424,7 @@ final class QuillSaveController extends DashboardControllerBase
         if ($id !== null) {
             $page = new QuillPage();
             $page->selectByID($id);
-            if ($page->getKey() === null || $page->deleted_at !== null) {
+            if ($page->getKey() === null || $page->deleted_at !== null || \Quill\services\editor\ExternalPageOverrides::isComponent($page)) {
                 throw new InvalidArgumentException('The selected page is no longer available.');
             }
         }

@@ -34,6 +34,7 @@ final class PageLibrary
     public function restore(QuillPage $page,QuillPageSnapshot $snapshot,int $version,int $adminId): void
     {
         if($snapshot->page_id!==$page->getKey())throw new \OutOfBoundsException('Version not found.');
+        if ($snapshot->source_type === 'urpc') { (new ExternalPageOverrides())->restore($page,$snapshot,$version,$adminId); return; }
         $archive=(new ContentArchive())->capture(new SnapshotQuillContentSource($snapshot));
         $page->transaction(function()use($page,$snapshot,$version,$adminId,$archive){
             $changed=$page->table($page->model_source)->where(['id'=>$page->getKey(),'lock_version'=>$version,'deleted_at'=>null])->update(['lock_version'=>$version+1,'updated_at'=>date('Y-m-d H:i:s')]);

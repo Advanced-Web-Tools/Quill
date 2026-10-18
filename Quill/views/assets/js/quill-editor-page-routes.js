@@ -3,7 +3,7 @@
     class QuillEditorPageRoutes {
         constructor(editor, bootstrap) {
             const get = id => document.getElementById(id);
-            if (bootstrap.editorType !== 'page' || !Number.isSafeInteger(bootstrap.editorId)) return;
+            if (bootstrap.externalSourceKind === 'component' || bootstrap.editorType !== 'page' || !Number.isSafeInteger(bootstrap.editorId)) return;
             get('editor-page-routes').hidden = false;
             const pageId = bootstrap.editorId, routes = structuredClone(bootstrap.pageRoutes || []);
             const dialog = get('editor-route-dialog'), form = get('editor-route-form');

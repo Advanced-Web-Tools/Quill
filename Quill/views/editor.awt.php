@@ -57,6 +57,9 @@
         'dataSources' => $editorDataSources ?? [],
         'pageRoutes' => $editorPageRoutes ?? [],
         'dataRoutes' => $editorDataRoutes ?? [],
+        'externalSourceRevision' => $editorExternalSourceRevision ?? null,
+        'externalSourceKey' => $editorExternalSourceKey ?? null,
+        'externalSourceKind' => $editorExternalSourceKind ?? null,
         'components' => $editorComponents ?? [],
         'externalComponents' => $editorExternalComponents ?? [],
         'externalComponentUrl' => '/dashboard/quill/external-component',
@@ -73,6 +76,8 @@
             <div class="editor-document-heading">
                 <div class="editor-document-name">
                     <h1>{{ $editorName ?? 'Untitled document' }}</h1>
+                    @if(!empty($editorExternalSourceRevision))<span class="editor-viewport-note">External {{ $editorExternalSourceKind ?? 'page' }} · Changes and added blocks are saved separately</span>@endif
+                    @if(!empty($editorExternalWarnings))<span class="editor-viewport-note" role="status"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> {{ implode(' ', $editorExternalWarnings) }}</span>@endif
                     <span id="editor-state-status" role="status">Loading document…</span>
                 </div>
             </div>
@@ -99,7 +104,7 @@
                     <p class="editor-group-description">Route changes apply immediately. Page content uses Save draft or Publish.</p><p id="editor-page-route-status" role="status"></p>
                 </div>
             </section></div>
-            <footer><a href="{{ ($editorType ?? 'page') === 'component' ? '/dashboard/quill/components' : '/dashboard/quill' }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to dashboard</a></footer>
+            <footer><a href="{{ (($editorType ?? 'page') === 'component' || ($editorExternalSourceKind ?? '') === 'component') ? '/dashboard/quill/components' : '/dashboard/quill' }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to dashboard</a></footer>
         </aside>
         <aside id="editor-page-styling-panel" class="editor-page-panel" aria-labelledby="editor-page-styling-title" hidden>
             <header class="editor-panel-heading"><h2 id="editor-page-styling-title">Page styling</h2><button type="button" data-close-page-panel aria-label="Close page styling"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
@@ -159,6 +164,8 @@
             <div id="editor-selection-actions" class="editor-selection-actions" hidden>
                 <button type="button" id="editor-detach-component" aria-describedby="editor-detach-component-note" hidden><i class="fa-solid fa-cube" aria-hidden="true"></i><span>Turn into block</span></button>
                 <p id="editor-detach-component-note" hidden>Make an editable local copy. Changes here will no longer update the shared component.</p>
+                <div id="editor-component-edit" hidden></div>
+                <hr id="editor-component-edit-divider" hidden>
                 <button type="button" id="editor-remove-selection" aria-describedby="editor-remove-selection-note"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Delete block</span></button>
                 <p id="editor-remove-selection-note" hidden>Removes only this instance from the document. The saved component stays in your library.</p>
             </div>

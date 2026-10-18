@@ -42,6 +42,10 @@ final class QuillBlockConverter
                 $result = $this->components->expand($input, $source, $context, $path, $documents);
                 return \Quill\services\animations\BlockAnimations::apply($this->animationTargets($result, $animationTargets, $animationPath, $section), $input, $source, $context, $path);
             }
+            if ($kind === 'element' && \Quill\services\rendering\ExternalComponentReference::matches($input)) {
+                $expanded=\Quill\services\rendering\ExternalComponentReference::expand($input,$context,$documents,$path);
+                return \Quill\services\animations\BlockAnimations::apply($this->animationTargets($expanded,$animationTargets,$animationPath,$section),$input,$source,$context,$path);
+            }
             if ($kind !== 'element') {
                 throw ConversionException::at($path . '/kind', 'Unknown block kind; expected element or component.');
             }
@@ -93,7 +97,7 @@ final class QuillBlockConverter
         $block = new URPCBlock($blockDescriptor);
         $block->setBlockAttributes($attributes);
         $block->setBlockContent($content);
-        $context->recordBlockSource($block, $input);
+        $context->recordBlockSource($block, $input, $source->getScopeKey());
         $context->enterFonts(\Quill\services\fonts\GoogleFonts::groups($input), $tag, $content);
         try {
             foreach ($children as $index => $reference) {

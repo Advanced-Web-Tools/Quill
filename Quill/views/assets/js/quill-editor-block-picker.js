@@ -11,6 +11,17 @@
             panel.addEventListener('keydown', event => { if (event.key === 'Escape') this.close(); });
             editor.on('selectionchange', () => this.updateTarget());
             editor.on('change', () => { if (this.insertionTarget) this.close(); });
+            const container = panel.querySelector('.editor-block-picker');
+            // Provider extensions may add their own groups after rendering. Keep them inside External.
+            new MutationObserver(() => {
+                const external = container.querySelector('[data-block-category="External components"] > .editor-block-grid');
+                if (!external) return;
+                for (const group of [...container.children]) {
+                    if (group.dataset.blockCategory === 'Components' || group === external.parentElement) continue;
+                    const buttons = [...group.querySelectorAll('[data-component-id]')];
+                    if (buttons.length && buttons.every(button => this.externalComponentIds?.has(button.dataset.componentId))) external.append(group);
+                }
+            }).observe(container, { childList: true });
             this.render();
         }
         updateTarget() {
@@ -57,9 +68,9 @@
             document.getElementById('editor-add-component').setAttribute('aria-expanded', 'false');
             document.getElementById(this.componentsOnly ? 'editor-add-component' : 'editor-add-block').focus();
         }
-        category(fragment, name, search) {
+        category(fragment, name, search, defaultOpen = true) {
             const section = document.createElement('details'); section.className = 'editor-block-category'; section.dataset.blockCategory = name;
-            section.open = !!search || (this.expanded.get(name) ?? true);
+            section.open = !!search || (this.expanded.get(name) ?? defaultOpen);
             section.addEventListener('toggle', () => { if (!search && section.isConnected) this.expanded.set(name, section.open); });
             const heading = document.createElement('summary'); heading.textContent = name;
             const chevron = document.createElement('i'); chevron.className = 'fa-solid fa-chevron-down'; chevron.setAttribute('aria-hidden', 'true'); heading.append(chevron);
@@ -98,20 +109,28 @@
                 });
                 categories.get(category).append(button);
             }
-            const components = [...(this.editor.ui?.components?.all() || []), ...(this.editor.ui?.components?.externals() || [])].filter(component => `${component.name} ${component.description} ${component.provider || ''} Components`.toLowerCase().includes(search));
-            if (components.length || !search) {
-                const grid = this.category(fragment, 'Components', search);
-                if (!components.length) {
+            const matches = component => `${component.name} ${component.description || ''} ${component.provider || ''} Components`.toLowerCase().includes(search);
+            const local = this.componentsOnly ? (this.editor.ui?.components?.all() || []).filter(matches) : [];
+            const external = this.componentsOnly ? (this.editor.ui?.components?.externals() || []).filter(matches) : [];
+            this.externalComponentIds = new Set(external.map(component => String(component.id)));
+            const components = [...local, ...external];
+            for (const group of this.componentsOnly ? [
+                { name: 'Components', items: local, defaultOpen: true },
+                { name: 'External components', items: external, defaultOpen: false },
+            ] : []) {
+                if (!group.items.length && (search || !group.defaultOpen)) continue;
+                const grid = this.category(fragment, group.name, search, group.defaultOpen);
+                if (!group.items.length) {
                     const empty = document.createElement('p'); empty.className = 'editor-component-empty'; empty.textContent = 'Save a block as a component to reuse it here.'; grid.append(empty);
                 }
-                for (const component of components) {
+                for (const component of group.items) {
                     const button = document.createElement('button'); button.type = 'button'; button.dataset.componentId = component.id;
                     button.title = component.description || component.name;
                     const icon = document.createElement('i'); icon.className = 'editor-block-icon fa-solid fa-cubes'; icon.setAttribute('aria-hidden', 'true');
                     const name = document.createElement('strong'); name.textContent = component.name; button.append(icon, name);
                     if (component.provider) {
                         const provider = document.createElement('small'); provider.className = 'editor-resource-provider'; provider.textContent = `Provided by ${component.provider}`; button.append(provider);
-                        button.title = `${component.description || component.name} · Inserts a local copy`;
+                        button.title = `${component.description || component.name} · Inserts a shared component`;
                     }
                     button.addEventListener('click', async () => {
                         const session = this.session, current = () => session === this.session && !this.panel.hidden;
@@ -128,7 +147,7 @@
                     grid.append(button);
                 }
             }
-            if (!categories.size && !components.length && search) { const empty = document.createElement('p'); empty.textContent = 'No matching blocks.'; fragment.append(empty); }
+            if (!categories.size && !components.length && search) { const empty = document.createElement('p'); empty.textContent = this.componentsOnly ? 'No matching components.' : 'No matching blocks.'; fragment.append(empty); }
             container.replaceChildren(fragment);
         }
     }

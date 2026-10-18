@@ -905,3 +905,9 @@ dialog :is(.editor-action-entry, .editor-action-step, .editor-action-node, .edit
 .editor-resource-provider { display: block; color: var(--editor-muted); font-size: var(--editor-text-xs); font-weight: var(--editor-weight-regular); line-height: 1.4; overflow-wrap: anywhere; }
 .editor-block-grid button > .editor-resource-provider { margin-top: 5px; }
 .editor-palette-collection > .editor-resource-provider { grid-column: 1 / -1; }
+
+#editor-component-edit > :is(a, button) { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: var(--editor-control-height, 36px); padding: 8px 12px; border: 1px solid var(--editor-line); border-radius: var(--editor-radius-sm); background: var(--editor-input); color: var(--editor-ink); font: inherit; text-decoration: none; }
+#editor-component-edit > :is(a, button):hover { border-color: var(--editor-accent); }
+#editor-component-edit-divider { margin: 14px 0; border: 0; border-top: 1px solid var(--editor-line); }
+
+.editor-block-grid > .editor-block-category { grid-column: 1 / -1; min-width: 0; }

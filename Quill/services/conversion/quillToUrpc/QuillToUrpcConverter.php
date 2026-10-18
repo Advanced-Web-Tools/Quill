@@ -27,6 +27,6 @@ final class QuillToUrpcConverter
         $pageCss = (new QuillStyleConverter())->declarations($settings->styles ?? new \stdClass(), 'document/settings/styles');
         if ($pageCss !== '') $context->addCss('body{' . $pageCss . '}');
         $context->validateActionBindings();
-        return new ConversionResult($document, $context->getAssets(), $context->getCss(), $context->getBlockSources(), $context->getActions(), $breakpoints);
+        return new ConversionResult($document, $context->getAssets(), $context->getCss(), $context->getBlockSources(), $context->getActions(), $breakpoints, $context->getBlockSourceScopes());
     }
 }

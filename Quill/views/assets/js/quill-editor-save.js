@@ -49,6 +49,7 @@
             payload.set('document', JSON.stringify(state.getDocument()));
             payload.set('mode', mode);
             payload.set('lock_version', String(this.#bootstrap.lockVersion));
+            if (this.#bootstrap.externalSourceRevision) payload.set('source_revision', this.#bootstrap.externalSourceRevision);
             get('editor-state-status').textContent = 'Saving…';
             try {
                 const response = await fetch(this.#bootstrap.saveUrl, { method: 'POST', body: payload, credentials: 'same-origin', headers: { Accept: 'application/json' } });
@@ -57,7 +58,7 @@
                 if (!Number.isSafeInteger(savedVersion) || savedVersion < 1) throw new Error('The save response is missing a valid document version. Local changes have been retained.');
                 this.#bootstrap.lockVersion = savedVersion;
                 state.markSaved(revision);
-                if (this.#bootstrap.editorType === 'component') window.dispatchEvent(new CustomEvent('quill.component.saved', { detail: this.#bootstrap.editorId }));
+                if (this.#bootstrap.editorType === 'component' || (this.#bootstrap.externalSourceKind === 'component' && mode === 'publish')) window.dispatchEvent(new CustomEvent('quill.component.saved', { detail: this.#bootstrap.externalSourceKey || this.#bootstrap.editorId }));
                 get('editor-state-status').textContent = state.dirty ? 'New changes · not saved' : result.message;
                 this.#showError(null);
                 const popup = get('editor-success');

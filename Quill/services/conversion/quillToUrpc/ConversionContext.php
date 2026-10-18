@@ -46,6 +46,7 @@ final class ConversionContext
 
     /** @var array<int, \stdClass> Original Quill data keyed by the resulting URPC object identity. */
     private array $blockSources = [];
+    private array $blockSourceScopes = [];
     private array $actions = [];
     private array $componentScopes = [];
     private array $targetAliases = [];
@@ -183,10 +184,13 @@ final class ConversionContext
         return $assets;
     }
     public function getCss(): string { return implode("\n", $this->css); }
-    public function recordBlockSource(\URPC\api\contracts\IURPCBlock $block, \stdClass $source): void
+    public function recordBlockSource(\URPC\api\contracts\IURPCBlock $block, \stdClass $source, string $scope = ''): void
     {
         $this->blockSources[spl_object_id($block)] = ConversionInput::copy($source);
+        $this->blockSourceScopes[spl_object_id($block)] = $scope;
     }
+    /** @return array<int, string> */
+    public function getBlockSourceScopes(): array { return $this->blockSourceScopes; }
     /** @return array<int, \stdClass> */
     public function getBlockSources(): array { return $this->blockSources; }
 }

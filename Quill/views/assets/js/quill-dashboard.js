@@ -15,6 +15,19 @@
         if (!menu) return;
         event.preventDefault(); menu.open = false; menu.querySelector('summary').focus();
     });
+    const disclosures = [...document.querySelectorAll('[data-quill-collapsible]')].map(section => {
+        const button = section.querySelector('[data-quill-resource-toggle]');
+        const disclosure = { section, button, expanded: false };
+        button.addEventListener('click', () => {
+            disclosure.expanded = button.getAttribute('aria-expanded') !== 'true';
+            setDisclosure(disclosure, disclosure.expanded);
+        });
+        return disclosure;
+    });
+    function setDisclosure({section, button}, expanded) {
+        section.toggleAttribute('data-collapsed', !expanded);
+        button.setAttribute('aria-expanded', String(expanded));
+    }
     const search=document.querySelector('[data-quill-search]'),filter=document.querySelector('[data-quill-filter]');
     const items=[...document.querySelectorAll('[data-quill-item]')];
     const applyFilter=()=>{
@@ -22,8 +35,20 @@
         let count=0;for(const item of items){item.hidden=!(item.dataset.search.toLocaleLowerCase().includes(query)&&(!status||item.dataset.status===status));if(!item.hidden)count++;}
         const empty=document.querySelector('[data-quill-no-results]');if(empty)empty.hidden=!!count;
         document.querySelectorAll('[data-quill-resource-section]').forEach(section=>{
-            section.hidden=![...section.querySelectorAll('[data-quill-item]')].some(item=>!item.hidden);
+            const visible = [...section.querySelectorAll('[data-quill-item]')].filter(item=>!item.hidden);
+            section.hidden=!visible.length;
+            const count = section.querySelector('[data-quill-resource-count]');
+            if (count) count.textContent = String(visible.length);
+            for (const heading of section.querySelectorAll(':scope > .card-grid > :is(h2, h3, h4)')) {
+                let card = heading.nextElementSibling, matches = false;
+                while (card && !card.matches('h2, h3, h4')) {
+                    if (card.matches('[data-quill-item]') && !card.hidden) matches = true;
+                    card = card.nextElementSibling;
+                }
+                heading.hidden = !matches;
+            }
         });
+        for (const disclosure of disclosures) setDisclosure(disclosure, !!query || status === 'external' || disclosure.expanded);
     };
     search?.addEventListener('input',applyFilter);filter?.addEventListener('change',applyFilter);
     document.querySelectorAll('[data-quill-reset-filters]').forEach(button=>button.addEventListener('click',()=>{

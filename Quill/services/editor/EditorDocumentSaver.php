@@ -18,7 +18,7 @@ final class EditorDocumentSaver
     {
         if (!in_array($mode, ['draft', 'publish'], true)) throw new \InvalidArgumentException('Choose draft or publish.');
         if ($owner->lock_version !== $version) throw new \DomainException('This document changed. Reload before saving.');
-        if ($owner instanceof QuillPage && $owner->source_type === 'urpc') throw new \InvalidArgumentException('URPC source pages require an override save pipeline.');
+        if ($owner instanceof QuillPage && $owner->source_type === 'urpc') throw new \InvalidArgumentException('Use the external UID override save pipeline with its source revision.');
         $original = $owner->getDocument();
         if (get_object_vars($original) !== []) {
             (new \Quill\services\conversion\quillToUrpc\QuillToUrpcConverter())->convert(

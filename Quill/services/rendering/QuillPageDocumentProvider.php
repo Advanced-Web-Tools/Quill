@@ -34,7 +34,10 @@ final class QuillPageDocumentProvider implements IURPCDocumentProvider
         if ($page === null) throw ConversionException::at($path, 'The page is missing or deleted.');
         $sourceNamespace = 'Quill/page/' . $pageId;
         $snapshotId = $page->getParam('published_snapshot_id');
-        if ($snapshotId !== null && !$this->draft) {
+        if ($page->source_type === 'urpc') {
+            $overrides = new \Quill\services\editor\ExternalPageOverrides();
+            $this->result = $overrides->render($overrides->definition($page), $page, $this->draft, \Quill\services\editor\ExternalPageOverrides::isComponent($page) ? 'component' : 'page');
+        } elseif ($snapshotId !== null && !$this->draft) {
             $model = (new QuillPageSnapshot())->useConnectionFrom($page);
             $snapshot = $model->newQuery()->where(['id' => $snapshotId, 'page_id' => $pageId])->firstModel();
             if ($snapshot === null) {

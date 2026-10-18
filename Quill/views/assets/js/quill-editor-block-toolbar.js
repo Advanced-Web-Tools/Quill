@@ -371,12 +371,23 @@
             if (this.#applying) return;
             const text = this.#text; if (!text?.isConnected) return;
             const path = text.parentElement.dataset.quillEditorNode;
+            const seen = new Set([this.#editor.state.getBlock(path)._quill?.editor?.urpcUid]);
+            const remember = (node, block) => {
+                if (!this.#editor.state.sourceBound) return block;
+                block._quill = structuredClone(block._quill || {}); block._quill.editor ??= {};
+                let uid = block._quill.editor.urpcUid;
+                // Browser formatting may split/clone a source span; only one may retain its UID.
+                if (!uid || seen.has(uid)) uid = 'quill-added:' + crypto.randomUUID();
+                block._quill.editor.urpcUid = uid; seen.add(uid);
+                this.#originalInline.set(node, block);
+                return block;
+            };
             const serialize = element => {
                 let content = '', children = [];
                 for (const node of element.childNodes) {
                     if (node.nodeType === 3) {
                         if (!children.length) content += node.textContent;
-                        else children.push({ descriptor: { name: 'span', props: {}, renderer: '' }, attributes: {}, content: node.textContent, children: [] });
+                        else children.push(remember(node, { ...(this.#originalInline.get(node) || {}), descriptor: { name: 'span', props: {}, renderer: '' }, attributes: {}, content: node.textContent, children: [] }));
                     } else if (node.nodeType === 1) {
                         if (node.hasAttribute('data-quill-editor-placeholder')) continue;
                         const tag = node.tagName.toLowerCase();
@@ -386,7 +397,7 @@
                         for (const attribute of node.attributes) {
                             if (!attribute.name.startsWith('data-quill-') && attribute.name !== 'draggable') attributes[attribute.name] = attribute.value;
                         }
-                        children.push({ ...(original || {}), descriptor: original?.descriptor || { name: tag, props: {}, renderer: '' }, attributes, ...serialize(node) });
+                        children.push(remember(node, { ...(original || {}), descriptor: original?.descriptor || { name: tag, props: {}, renderer: '' }, attributes, ...serialize(node) }));
                     }
                 }
                 return { content, children };

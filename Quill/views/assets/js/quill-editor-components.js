@@ -49,6 +49,17 @@
         }
         all() { return structuredClone(this.#items).sort((a, b) => a.name.localeCompare(b.name)); }
         externals() { return structuredClone(this.#bootstrap.externalComponents || []).sort((a, b) => a.name.localeCompare(b.name)); }
+        async editExternal(key) {
+            const tab = window.open('about:blank', '_blank');
+            if (!tab) throw new Error('Allow a new tab to open the external component editor.');
+            tab.opener = null;
+            try {
+                const body = new FormData(document.getElementById('editor-csrf')); body.set('key', key);
+                const data = await this.#request('/dashboard/quill/open-external-component', { method: 'POST', body });
+                if (!/^\/quill\/editor\/page\/[1-9][0-9]*$/.test(data?.editorUrl || '')) throw new Error('The server did not return a component editor.');
+                tab.location.replace(data.editorUrl);
+            } catch (error) { tab.close(); throw error; }
+        }
         open(path = this.#editor.selectedPath) {
             if (this.#saving) return;
             this.#editor.state.assertEditable(path);
@@ -111,7 +122,7 @@
             this.#refreshing = true; this.#lastRefresh = Date.now();
             try {
                 const entries = await Promise.all([...instances].map(async ([id, previous]) => {
-                    const data = await this.#request(`${this.#bootstrap.componentUrl}/${id}`);
+                    const data = await this.#request(typeof id === 'string' ? `${this.#bootstrap.externalComponentUrl}/${encodeURIComponent(id)}` : `${this.#bootstrap.componentUrl}/${id}`);
                     if (!data?.document?.sections) throw new Error('Unable to refresh this shared component.');
                     return { info: data.component || previous, document: data.document };
                 }));
@@ -122,6 +133,7 @@
             this.#editor.state.assertAvailable();
             if (this.#detaching) throw new Error('A component is already being converted.');
             const block = this.#editor.state.getBlock(path), info = block._quill?.component;
+            if (info?.external) throw new Error('External components remain source references. Use Edit in Quill to change their UID overrides.');
             if (!info || this.#editor.state.componentRoot(path) !== path) throw new Error('Select the whole component instance.');
             const revision = this.#editor.state.revision, original = JSON.stringify(block);
             this.#detaching = true;
@@ -151,7 +163,7 @@
                 const info = data.component || this.#items.find(item => item.id === id) || { id, name: 'Shared component' };
                 if (info.id !== id) throw new Error('The component response does not match the selected source.');
                 this.#lastRefresh = Date.now();
-                if (external) return this.#editor.state.insertBlocks(sectionIndex, blocks, parentPath, index);
+                if (external) return this.#editor.state.insertComponent({ ...info, external: true }, component, sectionIndex, parentPath, index);
                 return this.#editor.state.insertComponent(info, component, sectionIndex, parentPath, index);
             } finally { this.#inserting = false; }
         }

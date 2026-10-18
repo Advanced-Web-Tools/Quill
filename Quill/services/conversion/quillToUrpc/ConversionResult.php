@@ -14,6 +14,8 @@ final class ConversionResult
         /** @var array<int, \stdClass> Optional source metadata; never emitted by UrpcJsonSerializer. */
         public readonly array $blockSources = [],
         public readonly array $actions = [],
-        public readonly array $actionBreakpoints = []
+        public readonly array $actionBreakpoints = [],
+        /** @var array<int, string> Origin scope, distinguishing nested shared-component metadata. */
+        public readonly array $blockSourceScopes = []
     ) {}
 }

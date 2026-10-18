@@ -19,7 +19,7 @@ class RouteRegistration
         foreach ($records as $record) {
             $page = $record->page;
             // A non-null foreign key can still point to a missing or soft-deleted page.
-            if ($page === null || $page->deleted_at !== null) continue;
+            if ($page === null || $page->deleted_at !== null || \Quill\services\editor\ExternalPageOverrides::isComponent($page)) continue;
             $pageController = clone $controller;
             if ($pageController instanceof ObjectFactory) {
                 $pageController->addMethodCall('setPage')->addMethodArgs('setPage', [$page]);

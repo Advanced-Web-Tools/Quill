@@ -21,7 +21,7 @@
         if (bootstrap.error) throw new Error(bootstrap.error);
         bootstrap.document.assets ??= bootstrap.assets;
         bootstrap.document.settings = { title: bootstrap.name, description: bootstrap.description, ...(bootstrap.document.settings || {}) };
-        const state = new window.QuillEditorState(bootstrap.document, { type: bootstrap.editorType });
+        const state = new window.QuillEditorState(bootstrap.document, { type: bootstrap.editorType, sourceBound: !!bootstrap.externalSourceRevision });
         const updateDocumentIndicator = () => { root.dataset.documentDirty = String(state.dirty); };
         state.addEventListener('change', updateDocumentIndicator);
         state.addEventListener('saved', updateDocumentIndicator);
@@ -33,6 +33,7 @@
         editor.dataRoutes = Object.freeze((bootstrap.dataRoutes || []).map(route => Object.freeze(route)));
         const sectionSelect = { value: '0' };
         const hasSections = state.getDocument().sections.length > 0;
+        if (bootstrap.externalSourceKind === 'component') get('editor-page-tab-styling').hidden = true;
         get('editor-add-block').disabled = !hasSections;
         get('editor-add-component').disabled = !hasSections;
         canvas.setMoveHandler((source, target, position) => {
@@ -106,12 +107,19 @@
             componentAnimationsAbort?.abort(); componentAnimationsAbort = null;
             const locked = editor.isReadOnly();
             componentNotice.hidden = !locked;
+            get('editor-component-edit').hidden = get('editor-component-edit-divider').hidden = !locked;
+            get('editor-component-edit').replaceChildren();
             if (locked) {
                 const info = state.getBlock(state.selectedPath)._quill.component;
                 const heading = document.createElement('h3'); heading.textContent = info.name;
-                const text = document.createElement('p'); text.textContent = 'Shared component. Drag to reposition it. Content and styling are managed in the component editor.';
-                const link = document.createElement('a'); link.href = `/quill/editor/component/${info.id}`; link.target = '_blank'; link.rel = 'noopener'; link.textContent = 'Open component editor';
-                componentNotice.replaceChildren(heading, text, link);
+                const text = document.createElement('p'); text.textContent = info.external ? 'External component. Published source changes update this reference.' : 'Shared component. Drag to reposition it. Content and styling are managed in the component editor.';
+                const link = document.createElement(info.external ? 'button' : 'a');
+                if (info.external) { link.type = 'button'; link.textContent = 'Edit in Quill'; link.addEventListener('click', () => editor.ui.components.editExternal(info.id).catch(error => editor.reportError(error))); }
+                else { link.href = `/quill/editor/component/${info.id}`; link.target = '_blank'; link.rel = 'noopener'; link.textContent = 'Edit in Quill'; }
+                const pencil = document.createElement('i'); pencil.className = 'fa-solid fa-pen'; pencil.setAttribute('aria-hidden', 'true');
+                link.prepend(pencil);
+                get('editor-component-edit').append(link);
+                componentNotice.replaceChildren(heading, text);
                 if (editor.type === 'page' && editor.ui.animationLibrary) {
                     componentAnimationsAbort = new AbortController();
                     editor.ui.animationLibrary.mount(componentNotice, componentAnimationsAbort.signal);
@@ -119,7 +127,7 @@
             }
             const selected = state.selectedPath !== null;
             get('editor-selection-actions').hidden = !selected;
-            get('editor-detach-component').hidden = get('editor-detach-component-note').hidden = !locked;
+            get('editor-detach-component').hidden = get('editor-detach-component-note').hidden = !locked || !!(selected && state.getBlock(state.selectedPath)._quill?.component?.external);
             get('editor-remove-selection').querySelector('span').textContent = locked ? 'Remove component instance' : 'Delete block';
             get('editor-remove-selection-note').hidden = !locked;
             if (locked) get('editor-remove-selection').setAttribute('aria-describedby', 'editor-remove-selection-note');

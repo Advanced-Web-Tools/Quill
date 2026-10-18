@@ -17,6 +17,7 @@ final class EditorDocumentLoader
 
     public function load(QuillPage|QuillComponent $owner): array
     {
+        if ($owner instanceof QuillPage && $owner->source_type === 'urpc') return (new ExternalPageOverrides())->load($owner);
         $source = new WorkingQuillContentSource($owner);
         $result = (new QuillToUrpcConverter())->convert($source);
         $document = $this->expanded($result);
@@ -30,6 +31,18 @@ final class EditorDocumentLoader
         $document->settings->description = $owner->description ?? '';
         $document->assets = $original->assets ?? (object) ['styles' => [], 'scripts' => []];
         return ['document' => $document, 'css' => $result->scopedCss, 'assets' => $result->assets];
+    }
+
+    /** Restore shared-component wrappers in an isolated external editor transport. */
+    public function grouped(\Quill\services\conversion\quillToUrpc\ConversionResult $result, QuillContentSource $source, QuillPage|QuillComponent $owner): \stdClass
+    {
+        $document=$this->expanded($result);
+        $canonical=ConversionInput::decode($source->getDocument('document'),'document');
+        foreach($canonical->sections as $index=>$section) {
+            $offset=0;
+            $document->sections[$index]->blocks=$this->group($section->blocks,$source,$document->sections[$index]->blocks,$offset,$owner,'section/'.$index);
+        }
+        return $document;
     }
 
     /** Editor transport for an already expanded conversion, without shared-instance wrappers. */
@@ -47,6 +60,22 @@ final class EditorDocumentLoader
         $grouped = [];
         foreach ($references as $index => $id) {
             $input = ConversionInput::decode($source->getBlock($id, $path), $path);
+            if ($input->kind === 'element' && \Quill\services\rendering\ExternalComponentReference::matches($input)) {
+                global $eventDispatcher;
+                $key=$input->descriptor->props->key;
+                $definition=(new ExternalResources())->components($eventDispatcher)->get($key);
+                $node=$definition ? ($nodes[$offset++]??throw new \LogicException('External component preview is missing.')) : null;
+                $overrides=new ExternalPageOverrides($eventDispatcher);
+                $overrideOwner=$overrides->find($key,'component');
+                $preview=$definition ? $overrides->publishedComponentDocument($definition) : null;
+                $grouped[]=(object)['descriptor'=>(object)['name'=>'quill-component','props'=>new \stdClass(),'renderer'=>''],
+                    'attributes'=>new \stdClass(),'content'=>'','children'=>$node?[$node]:[],
+                    '_quill'=>(object)['editor'=>$input->editor??new \stdClass(),'animations'=>$input->animations??[], 'component'=>(object)[
+                        'id'=>$key,'external'=>true,'provider'=>$definition?->provider??'Unavailable','name'=>$definition?->name??('Unavailable: '.$key),'version'=>$overrideOwner?->published_snapshot_id??1,
+                        'instanceId'=>$input->editor->componentInstanceId,'externalTargets'=>$input->editor->externalTargets??new \stdClass(),
+                        'assets'=>$preview?->assets??(object)['styles'=>[],'scripts'=>[]],'breakpoints'=>$preview?->settings->breakpoints??(object)['tablet'=>1024,'mobile'=>767]]]];
+                continue;
+            }
             if ($input->kind === 'component') {
                 $componentId = $input->component_id;
                 if (!isset($this->components[$componentId])) {
@@ -64,7 +93,7 @@ final class EditorDocumentLoader
                 $grouped[] = (object) [
                     'descriptor' => (object) ['name' => 'quill-component', 'props' => new \stdClass(), 'renderer' => ''],
                     'attributes' => new \stdClass(), 'content' => '', 'children' => $children,
-                    '_quill' => (object) ['animations' => $input->animations ?? [], 'component' => (object) [
+                    '_quill' => (object) ['editor' => $input->editor ?? new \stdClass(), 'animations' => $input->animations ?? [], 'component' => (object) [
                         'id' => $componentId, 'name' => $component->name, 'version' => $component->lock_version,
                         'externalTargets' => $input->editor->externalTargets ?? new \stdClass(),
                         'instanceId' => $input->editor->componentInstanceId ?? ('qc-' . substr(hash('sha256', $source->getScopeKey() . '/' . $path . '/' . $index), 0, 32)),

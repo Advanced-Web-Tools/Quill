@@ -36,8 +36,9 @@ final class QuillController extends DashboardControllerBase
 
         $pages = new QuillPageCollection();
 
-        $params['pages'] = array_values(array_filter($pages->obCollection->toArray(), static fn(QuillPage $page): bool => $page->deleted_at === null));
-        $params['externalPages'] = array_map(static fn($definition) => $definition->summary(), (new \Quill\services\editor\ExternalResources())->pages($this->eventDispatcher)->all());
+        $params['pages'] = array_values(array_filter($pages->obCollection->toArray(), static fn(QuillPage $page): bool => $page->deleted_at === null && $page->source_type !== 'urpc'));
+        $externalOverrides = new \Quill\services\editor\ExternalPageOverrides($this->eventDispatcher);
+        $params['externalPages'] = array_map(fn($definition) => $definition->summary() + ['overridePageId' => $externalOverrides->find($definition->key)?->getKey()], (new \Quill\services\editor\ExternalResources())->pages($this->eventDispatcher)->all());
 
         $params['pageTemplates'] = (new \Quill\services\editor\PageLibrary())->templates((new \admin\Admin())->getKey());
         $params['authors'] = $this->authors($params['pages']);
@@ -63,7 +64,7 @@ final class QuillController extends DashboardControllerBase
         $pages = new QuillPageCollection();
         $params['pages'] = array_values(array_filter(
             $pages->obCollection->toArray(),
-            static fn(QuillPage $page): bool => $page->deleted_at === null
+            static fn(QuillPage $page): bool => $page->deleted_at === null && !\Quill\services\editor\ExternalPageOverrides::isComponent($page)
         ));
         $params['pageNames'] = [];
         foreach ($params['pages'] as $page) $params['pageNames'][$page->getKey()] = $page->name;
@@ -84,7 +85,8 @@ final class QuillController extends DashboardControllerBase
         $components = new QuillComponentCollection();
         $params['components'] = array_values(array_filter($components->obCollection->toArray(), static fn(QuillComponent $component): bool => $component->deleted_at === null));
         $params['authors'] = $this->authors($params['components']);
-        $params['externalComponents'] = array_map(static fn($definition) => $definition->summary(), (new \Quill\services\editor\ExternalResources())->components($this->eventDispatcher)->all());
+        $externalOverrides = new \Quill\services\editor\ExternalPageOverrides($this->eventDispatcher);
+        $params['externalComponents'] = array_map(fn($definition) => $definition->summary() + ['overridePageId' => $externalOverrides->find($definition->key, 'component')?->getKey()], (new \Quill\services\editor\ExternalResources())->components($this->eventDispatcher)->all());
 
         return $this->view($params);
     }
@@ -172,8 +174,9 @@ final class QuillController extends DashboardControllerBase
         $renderer = new PublicPageController();
         $renderer->setContext($this->getContext() ?? new \context\Context(dirname(__DIR__), 'Quill', '1'));
         $renderer->eventDispatcher = $this->eventDispatcher;
-        $renderer->setSourceNamespace('Quill/external/' . $definition->key);
-        $renderer->setDocument($definition->document);
+        $owner = (new \Quill\services\editor\ExternalPageOverrides($this->eventDispatcher))->find($definition->key);
+        if ($owner) $renderer->setPage($owner);
+        else { $renderer->setSourceNamespace('Quill/external/' . $definition->key); $renderer->setDocument($definition->document); }
         return Response::make()->file('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>'
             . htmlspecialchars($definition->name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</title></head><body>' . $renderer->render() . '</body></html>')
             ->asHtml()->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow')->header('X-Frame-Options', 'SAMEORIGIN');
@@ -197,13 +200,20 @@ final class QuillController extends DashboardControllerBase
             // Creation currently stores {} until the document receives its first blocks.
             if (get_object_vars($item->getDocument()) === []
                 && !($item instanceof QuillPage && $item->source_type === 'urpc')) return [];
-            $loaded = (new \Quill\services\editor\EditorDocumentLoader())->load($item);
+            $external = $item instanceof QuillPage && $item->source_type === 'urpc';
+            $loaded = $external
+                ? (new \Quill\services\editor\ExternalPageOverrides($this->eventDispatcher))->load($item)
+                : (new \Quill\services\editor\EditorDocumentLoader())->load($item);
             return [
                 'editorDocumentJson' => json_encode($loaded['document'], JSON_THROW_ON_ERROR),
+                'editorExternalSourceRevision' => $loaded['sourceRevision'] ?? null,
+                'editorExternalSourceKey' => $loaded['sourceKey'] ?? null,
+                'editorExternalWarnings' => $loaded['warnings'] ?? [],
+                'editorExternalSourceKind' => $external ? (\Quill\services\editor\ExternalPageOverrides::isComponent($item) ? 'component' : 'page') : null,
                 'editorCss' => $loaded['css'],
                 'editorAssets' => $loaded['assets'],
             ];
-        } catch (ConversionException|\JsonException|\UnexpectedValueException|\InvalidArgumentException $error) {
+        } catch (ConversionException|\JsonException|\UnexpectedValueException|\InvalidArgumentException|\OutOfBoundsException $error) {
             return ['editorError' => $error->getMessage()];
         }
     }

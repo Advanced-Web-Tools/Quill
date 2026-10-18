@@ -66,12 +66,28 @@ final class EditorDocumentMapper
         \Quill\services\animations\AnimationLibrary::validateBindings($source->animations ?? []);
         if (isset($source->component)) {
             $component = ConversionInput::object($source->component, 'block/component');
+            if (($component->external ?? false) === true) {
+                $key=$component->id??null; $instance=$component->instanceId??null;
+                if(!is_string($key))throw new \InvalidArgumentException('Choose an external component registry key.');
+                \Quill\api\editor\DefinitionValidation::key($key);
+                if(!is_string($instance)||!preg_match('/^qc-[a-zA-Z0-9_-]{1,80}$/D',$instance))throw new \InvalidArgumentException('Invalid external component instance.');
+                $reference=(object)['schema_version'=>1,'kind'=>'element',
+                    'descriptor'=>(object)['name'=>'div','props'=>(object)['key'=>$key],'renderer'=>\Quill\services\rendering\ExternalComponentReference::class],
+                    'attributes'=>new \stdClass(),'content'=>'','children'=>[],
+                    'editor'=>(object)['componentInstanceId'=>$instance,'externalTargets'=>ConversionInput::object($component->externalTargets??new \stdClass(),'component/externalTargets')]];
+                if(isset($source->animations))$reference->animations=$source->animations;
+                if(isset($source->editor->urpcUid))$reference->editor->urpcUid=$source->editor->urpcUid;
+                $components[count($metadata)]=$reference; $metadata[]=new \stdClass();
+                $block->descriptor=(object)['name'=>'div','props'=>new \stdClass(),'renderer'=>''];
+                $block->attributes=new \stdClass(); $block->content=''; $block->children=[]; unset($block->_quill); return;
+            }
             $id = ConversionInput::id($component->id ?? null, 'block/component/id');
             $instance = $component->instanceId ?? null;
             if (!is_string($instance) || !preg_match('/^qc-[a-zA-Z0-9_-]{1,80}$/D', $instance)) throw new \InvalidArgumentException('Invalid component instance identity.');
             $components[count($metadata)] = (object) ['schema_version' => 1, 'kind' => 'component', 'component_id' => $id,
                 'editor' => (object) ['componentInstanceId' => $instance, 'externalTargets' => ConversionInput::object($component->externalTargets ?? new \stdClass(), 'component/externalTargets')]];
             if (isset($source->animations)) $components[count($metadata)]->animations = $source->animations;
+            if (isset($source->editor->urpcUid)) $components[count($metadata)]->editor->urpcUid = $source->editor->urpcUid;
             $metadata[] = new \stdClass();
             // Preview content is never accepted as a write to the shared source.
             $block->descriptor = (object) ['name' => 'div', 'props' => new \stdClass(), 'renderer' => ''];

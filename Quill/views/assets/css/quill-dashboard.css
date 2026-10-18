@@ -145,3 +145,22 @@
 .quill-dashboard .quill-card-menu-items .btn:hover { background: var(--surface-secondary); }
 .quill-card-menu-items .quill-card-availability { padding: 10px; line-height: 1.6; }
 .quill-card-footer:empty { display: none; }
+
+/* Provider category labels are headings, even when injected directly into a card grid. */
+.quill-dashboard .quill-resource-section > .card-grid > :is(h2, h3, h4) {
+    grid-column: 1 / -1; margin: 12px 0 0; padding: 0; border: 0;
+    border-radius: 0; background: transparent; box-shadow: none;
+    color: var(--muted); font-size: var(--small-size); font-weight: var(--weight-medium);
+}
+.quill-resource-heading { margin: 0; }
+.quill-resource-toggle {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: var(--touch-size);
+    padding: 8px 0; border: 0; border-radius: var(--radius-sm); background: transparent;
+    color: var(--text); font: inherit; text-align: left; cursor: pointer;
+}
+.quill-resource-toggle:hover { color: var(--accent); }
+.quill-resource-toggle > i { width: 14px; font-size: 12px; text-align: center; transition: transform .14s ease; }
+.quill-resource-toggle[aria-expanded=true] > i { transform: rotate(90deg); }
+.quill-resource-count { color: var(--muted); font-size: var(--caption-size); font-weight: var(--weight-normal); font-variant-numeric: tabular-nums; }
+.quill-resource-section[data-collapsed] > :not(.quill-resource-heading) { display: none; }
+@media (prefers-reduced-motion: reduce) { .quill-resource-toggle > i { transition: none; } }

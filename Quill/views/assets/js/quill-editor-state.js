@@ -31,6 +31,15 @@
         block.children.forEach((child, index) => validateBlock(child, `${path}/children/${index}`, depth + 1));
     }
 
+    // These identities belong to Quill additions, never to provider matching.
+    function externalIdentities(blocks, renew = false) {
+        for (const block of blocks) {
+            block._quill ??= {}; block._quill.editor ??= {};
+            if (renew || !block._quill.editor.urpcUid) block._quill.editor.urpcUid = 'quill-added:' + crypto.randomUUID();
+            if (!block._quill.component) externalIdentities(block.children, renew);
+        }
+    }
+
     function validateDocument(document) {
         if (!isObject(document) || document.schema_version !== 1 || !Array.isArray(document.sections)) {
             throw new Error('Expected a schema_version 1 document with sections.');
@@ -76,7 +85,7 @@
     function sharedBlock(info, document, instanceId = 'qc-' + crypto.randomUUID(), externalTargets = {}) {
         return { descriptor: { name: 'quill-component', props: {}, renderer: '' }, attributes: {}, content: '',
             children: copy(document.sections.flatMap(section => section.blocks)),
-            _quill: { component: { id: info.id, name: info.name, version: info.version || 1, instanceId, externalTargets: copy(externalTargets),
+            _quill: { component: { id: info.id, name: info.name, version: info.version || 1, ...(info.external ? { external: true, provider: info.provider } : {}), instanceId, externalTargets: copy(externalTargets),
                 assets: copy(document.assets || { styles: [], scripts: [] }),
                 breakpoints: copy(document.settings?.breakpoints || { tablet: 1024, mobile: 767 }) } } };
     }
@@ -133,11 +142,12 @@
         #revision = 0;
         #componentPreviews = new Map();
         #editorType;
+        #sourceBound;
         #isolatedSession = null;
 
-        constructor(document, { type = 'page' } = {}) {
+        constructor(document, { type = 'page', sourceBound = false } = {}) {
             super();
-            this.#editorType = type;
+            this.#editorType = type; this.#sourceBound = sourceBound;
             validateDocument(document);
             this.#document = copy(document);
         }
@@ -153,7 +163,7 @@
             block._quill = { ...(block._quill || {}), animations: copy(bindings) };
             if (!bindings.length) delete block._quill.animations;
             if (legacyBindingId && candidate.settings?.animation_bindings) candidate.settings.animation_bindings = candidate.settings.animation_bindings.filter(binding => binding.id !== legacyBindingId);
-            validateDocument(candidate);
+            this.#validateDocument(candidate);
             if (JSON.stringify(candidate) === JSON.stringify(this.#document)) return;
             this.#document = candidate; this.#dirty = true; this.#revision++;
             this.dispatchEvent(new CustomEvent('change', { detail: { source: 'animationbindings' } }));
@@ -169,7 +179,7 @@
                     window.QuillAnimations.validate(animations, bindings);
                     const candidate = copy(this.#document);
                     candidate.settings = { ...(candidate.settings || {}), animations: copy(animations), animation_bindings: copy(bindings) };
-                    animationTargets(candidate); validateDocument(candidate);
+                    animationTargets(candidate); this.#validateDocument(candidate);
                     if (JSON.stringify(candidate) === JSON.stringify(this.#document)) return;
                     this.#document = candidate; this.#dirty = true; this.#revision++;
                     this.dispatchEvent(new CustomEvent('change', { detail: { source: 'animations' } }));
@@ -182,6 +192,11 @@
             });
         }
 
+        get sourceBound() { return this.#sourceBound; }
+        #validateDocument(document) {
+            if (this.#sourceBound) document.sections.forEach(section => externalIdentities(section.blocks));
+            validateDocument(document);
+        }
         get editorType() { return this.#editorType; }
         componentRoot(path = this.#selectedPath) { return componentRoot(this.#document, path); }
         assertEditable(path = this.#selectedPath) {
@@ -214,7 +229,7 @@
             findList(candidate, parts.join('.'))[index] = sharedBlock(info, document, 'qc-' + crypto.randomUUID(), aliases);
             animationReferences.forEach(reference => { if (reference.node === originalAnimationNode) reference.node = findBlock(candidate, path); });
             remapAnimations(candidate, animationReferences);
-            validateDocument(candidate); this.#componentPreviews.set(info.id, { info: copy(info), document: copy(document) });
+            this.#validateDocument(candidate); this.#componentPreviews.set(info.id, { info: copy(info), document: copy(document) });
             this.#document = candidate; this.#selectedPath = path; this.#dirty = true; this.#revision++;
             this.dispatchEvent(new CustomEvent('change', { detail: { source: 'component-conversion' } }));
             this.dispatchEvent(new Event('selectionchange'));
@@ -226,6 +241,7 @@
             if (!original._quill?.component) throw new Error('Select a shared component.');
             validateDocument(local);
             const roots = local.sections.flatMap(section => section.blocks);
+            if (this.#sourceBound) externalIdentities(roots, true);
             if (!roots.length) throw new Error('This component has no blocks to convert.');
             const ensureLocal = nodes => nodes.forEach(node => { if (node._quill?.component) throw new Error('The local copy still contains a shared component.'); ensureLocal(node.children); });
             ensureLocal(roots);
@@ -266,7 +282,7 @@
             const assets = candidate.assets || { styles: [], scripts: [] };
             for (const kind of ['styles','scripts']) assets[kind] = [...new Set([...(assets[kind] || []), ...(local.assets?.[kind] || [])])];
             candidate.assets = assets;
-            validateDocument(candidate);
+            this.#validateDocument(candidate);
             this.#document = candidate; this.#selectedPath = path; this.#dirty = true; this.#revision++;
             this.dispatchEvent(new CustomEvent('change', { detail: { source: 'component-detach' } }));
             this.dispatchEvent(new Event('selectionchange'));
@@ -290,6 +306,7 @@
                 if (cached) {
                     const updated = sharedBlock(cached.info, cached.document, component.instanceId, component.externalTargets);
                     if (block._quill?.animations) updated._quill.animations = copy(block._quill.animations);
+                    if (block._quill?.editor?.urpcUid) updated._quill.editor = { urpcUid: block._quill.editor.urpcUid };
                     if (JSON.stringify(block) !== JSON.stringify(updated)) { blocks[index] = updated; changed = true; }
                 } else if (!component) visit(block.children);
             });
@@ -319,10 +336,14 @@
             if (changes.attributes !== undefined) block.attributes = copy(changes.attributes);
             if (changes.content !== undefined) block.content = changes.content;
             if (changes.children !== undefined) block.children = copy(changes.children);
-            if (changes._quill !== undefined) block._quill = copy(changes._quill);
+            if (changes._quill !== undefined) {
+                const uid = block._quill?.editor?.urpcUid;
+                block._quill = copy(changes._quill);
+                if (this.#sourceBound && uid) { block._quill.editor ??= {}; block._quill.editor.urpcUid = uid; }
+            }
             // Validate the complete candidate before committing so an invalid edit leaves state intact.
             remapAnimations(candidate, animationReferences);
-            validateDocument(candidate);
+            this.#validateDocument(candidate);
             if (JSON.stringify(candidate) === JSON.stringify(this.#document)) return;
             this.#document = candidate;
             this.#dirty = true;
@@ -335,7 +356,7 @@
             if (!isObject(changes)) throw new Error('Invalid page settings.');
             const candidate = copy(this.#document);
             candidate.settings = { ...(candidate.settings || {}), ...copy(changes) };
-            validateDocument(candidate);
+            this.#validateDocument(candidate);
             if (JSON.stringify(candidate) === JSON.stringify(this.#document)) return;
             this.#document = candidate; this.#dirty = true; this.#revision++;
             this.dispatchEvent(new CustomEvent('change', { detail: { source: 'page-settings' } }));
@@ -371,7 +392,7 @@
                 visit(block.children);
             });
             candidate.sections.forEach(section => visit(section.blocks));
-            validateDocument(candidate);
+            this.#validateDocument(candidate);
             if (JSON.stringify(candidate) === JSON.stringify(this.#document)) return;
             this.#document = candidate; this.#dirty = true; this.#revision++;
             this.dispatchEvent(new CustomEvent('change', { detail: { source: 'actions' } }));
@@ -406,6 +427,7 @@
             if (!Number.isInteger(position) || position < 0 || position > blocks.length) throw new Error('Invalid insertion position.');
             const path = `${parent ? parentPath : sectionIndex}.${position}`;
             const instances = copy(templates);
+            if (this.#sourceBound) externalIdentities(instances, true);
             const renewTargets = nodes => nodes.forEach(block => {
                 if (block._quill?.component) { block._quill.component.instanceId = 'qc-' + crypto.randomUUID(); block._quill.component.externalTargets = {}; return; }
                 if (block._quill?.editor?.actionTargetId) block._quill.editor.actionTargetId = 'qt-' + crypto.randomUUID();
@@ -414,7 +436,7 @@
             renewTargets(instances);
             blocks.splice(position, 0, ...instances);
             remapAnimations(candidate, animationReferences);
-            validateDocument(candidate);
+            this.#validateDocument(candidate);
             this.#document = candidate;
             this.#dirty = true;
             this.#revision++;
@@ -452,7 +474,7 @@
             const selectionRemoved = this.#selectedPath === path || this.#selectedPath?.startsWith(path + '.');
             const next = selectionRemoved ? (parent.includes('.') ? findBlock(candidate, parent) : list[index] || list[index - 1] || null) : selected;
             remapAnimations(candidate, animationReferences);
-            validateDocument(candidate);
+            this.#validateDocument(candidate);
             this.#document = candidate; this.#selectedPath = next ? pathOf(candidate, next) : null;
             this.#dirty = true; this.#revision++;
             this.dispatchEvent(new CustomEvent('change', { detail: { source: 'structure' } }));
@@ -486,7 +508,7 @@
             const index = position === 'inside' ? targetList.length : targetList.indexOf(target) + (position === 'after' ? 1 : 0);
             targetList.splice(index, 0, source);
             remapAnimations(candidate, animationReferences);
-            validateDocument(candidate);
+            this.#validateDocument(candidate);
             this.#document = candidate;
             this.#selectedPath = pathOf(candidate, selected);
             this.#dirty = true;
