@@ -26,11 +26,12 @@ final class EditorDocumentSaver
             );
         }
         $mapped = (new EditorDocumentMapper())->map($document, $original, $owner);
-        return $owner->transaction(function () use ($owner, $mapped, $version, $mode, $adminId): array {
+        return $owner->transaction(function () use ($owner, $mapped, $document, $version, $mode, $adminId): array {
             $changed = $owner->table($owner->model_source)->where([
                 'id' => $owner->getKey(), 'lock_version' => $version, 'deleted_at' => null,
             ])->update(['lock_version' => $version + 1, 'updated_at' => date('Y-m-d H:i:s')]);
             if (!$changed) throw new \DomainException('This document changed. Reload before saving.');
+            (new BlockVersionHistory())->capture($owner, $document, $adminId);
             // New rows isolate page edits from reused working blocks and published snapshots.
             $ids = [];
             foreach ($mapped->blocks as $localId => $blockDocument) {

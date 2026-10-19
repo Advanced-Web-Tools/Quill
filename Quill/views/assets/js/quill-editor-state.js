@@ -40,6 +40,14 @@
         }
     }
 
+    function historyIdentities(blocks, renew = false) {
+        for (const block of blocks) {
+            block._quill ??= {}; block._quill.editor ??= {};
+            if (renew || !block._quill.editor.historyId) block._quill.editor.historyId = 'qh-' + crypto.randomUUID();
+            if (!block._quill.component) historyIdentities(block.children, renew);
+        }
+    }
+
     function validateDocument(document) {
         if (!isObject(document) || document.schema_version !== 1 || !Array.isArray(document.sections)) {
             throw new Error('Expected a schema_version 1 document with sections.');
@@ -150,6 +158,7 @@
             this.#editorType = type; this.#sourceBound = sourceBound;
             validateDocument(document);
             this.#document = copy(document);
+            if (!this.#sourceBound) this.#document.sections.forEach(section => historyIdentities(section.blocks));
         }
 
         setAnimationBindings(path, bindings) {
@@ -194,6 +203,7 @@
 
         get sourceBound() { return this.#sourceBound; }
         #validateDocument(document) {
+            if (!this.#sourceBound) document.sections.forEach(section => historyIdentities(section.blocks));
             if (this.#sourceBound) document.sections.forEach(section => externalIdentities(section.blocks));
             validateDocument(document);
         }
@@ -242,6 +252,7 @@
             validateDocument(local);
             const roots = local.sections.flatMap(section => section.blocks);
             if (this.#sourceBound) externalIdentities(roots, true);
+            else historyIdentities(roots, true);
             if (!roots.length) throw new Error('This component has no blocks to convert.');
             const ensureLocal = nodes => nodes.forEach(node => { if (node._quill?.component) throw new Error('The local copy still contains a shared component.'); ensureLocal(node.children); });
             ensureLocal(roots);
@@ -337,9 +348,39 @@
             if (changes.content !== undefined) block.content = changes.content;
             if (changes.children !== undefined) block.children = copy(changes.children);
             if (changes._quill !== undefined) {
+                const historyId = block._quill?.editor?.historyId;
                 const uid = block._quill?.editor?.urpcUid;
                 block._quill = copy(changes._quill);
+                if (historyId) { block._quill.editor ??= {}; block._quill.editor.historyId = historyId; }
                 if (this.#sourceBound && uid) { block._quill.editor ??= {}; block._quill.editor.urpcUid = uid; }
+            }
+            if (source === 'block-history' && changes.children !== undefined) {
+                this.#hydrateComponents(candidate);
+                const identity = node => this.#sourceBound ? node._quill?.editor?.urpcUid : node._quill?.editor?.historyId;
+                const restored = new Map(), instances = new Set();
+                const visitRestored = node => {
+                    const uid = identity(node);
+                    if (uid) {
+                        if (restored.has(uid)) throw new Error('This version contains duplicate block identities.');
+                        restored.set(uid, node);
+                    }
+                    if (node._quill?.component) { instances.add(node._quill.component.instanceId); return; }
+                    node.children.forEach(visitRestored);
+                };
+                visitRestored(block);
+                const visitOutside = (node, nodePath) => {
+                    if (nodePath === path) return;
+                    if (restored.has(identity(node)) || node._quill?.component && instances.has(node._quill.component.instanceId)) {
+                        throw new Error('A saved child now exists outside this block. Move it back or remove it before restoring this version.');
+                    }
+                    if (!node._quill?.component) node.children.forEach((child, index) => visitOutside(child, `${nodePath}.${index}`));
+                };
+                candidate.sections.forEach((section, index) => section.blocks.forEach((node, at) => visitOutside(node, `${index}.${at}`)));
+                // Keep page animation targets attached to surviving children after a historical reorder.
+                animationReferences.forEach(reference => {
+                    const uid = identity(reference.node);
+                    if (uid && restored.has(uid)) reference.node = restored.get(uid);
+                });
             }
             // Validate the complete candidate before committing so an invalid edit leaves state intact.
             remapAnimations(candidate, animationReferences);
@@ -427,6 +468,7 @@
             if (!Number.isInteger(position) || position < 0 || position > blocks.length) throw new Error('Invalid insertion position.');
             const path = `${parent ? parentPath : sectionIndex}.${position}`;
             const instances = copy(templates);
+            if (!this.#sourceBound) historyIdentities(instances, true);
             if (this.#sourceBound) externalIdentities(instances, true);
             const renewTargets = nodes => nodes.forEach(block => {
                 if (block._quill?.component) { block._quill.component.instanceId = 'qc-' + crypto.randomUUID(); block._quill.component.externalTargets = {}; return; }

@@ -21,6 +21,12 @@ final class ExternalResources
     {
         $registry = new ColorPaletteRegistry(); $dispatcher->dispatch(new ExternalColorPalettesRequestEvent($registry)); return $registry;
     }
+    public function mediaLibraries(EventDispatcher $dispatcher): \Quill\api\resources\MediaLibraryRegistry
+    {
+        $registry = new \Quill\api\resources\MediaLibraryRegistry();
+        $dispatcher->dispatch(new \Quill\api\events\MediaLibrariesRequestEvent($registry));
+        return $registry;
+    }
     /** Convert without rendering processors; reuse Quill's normal validation and metadata. */
     public function document(ExternalDocument $definition, bool $component = false): \stdClass
     {

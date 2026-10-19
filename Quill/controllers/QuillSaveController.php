@@ -3,7 +3,6 @@
 namespace Quill\controllers;
 
 use admin\Admin;
-use Dashboard\api\page\DashboardControllerBase;
 use InvalidArgumentException;
 use Quill\models\QuillComponent;
 use Quill\models\QuillDynamicRoute;
@@ -16,7 +15,7 @@ use Quill\services\editor\EditorDocumentSaver;
 use Quill\services\conversion\shared\ConversionInput;
 use Quill\services\conversion\shared\ConversionException;
 
-final class QuillSaveController extends DashboardControllerBase
+final class QuillSaveController extends QuillControllerBase
 {
     public function index(array|string $params): Response
     {
@@ -83,6 +82,59 @@ final class QuillSaveController extends DashboardControllerBase
         } catch (Throwable $error) {
             error_log('Quill document save failed: ' . $error->getMessage());
             return $this->respond(500, 'Unable to save the document. Please try again.');
+        }
+    }
+
+    public function blockHistory(array|string $params = []): Response
+    {
+        $this->checkAuth();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') return $this->respond(405, 'Use GET.')->header('Allow', 'GET');
+        try {
+            if (!is_array($params) || !in_array($params['type'] ?? null, ['page', 'component'], true)) return $this->respond(404, 'Document not found.');
+            $id = filter_var($params['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($id === false) return $this->respond(404, 'Document not found.');
+            $owner = $params['type'] === 'page' ? new QuillPage() : new QuillComponent();
+            $owner->selectByID($id);
+            if ($owner->getKey() === null || $owner->deleted_at !== null) return $this->respond(404, 'Document not found.');
+            $uid = $_GET['uid'] ?? null;
+            $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if (!is_string($uid) || $page === false) throw new InvalidArgumentException('Invalid history request.');
+            return $this->respond(200, 'Block history loaded.', (new \Quill\services\editor\BlockVersionHistory())->listing($owner, $uid, $page));
+        } catch (InvalidArgumentException $error) { return $this->respond(422, $error->getMessage()); }
+        catch (Throwable $error) {
+            error_log('Quill block history failed: ' . $error->getMessage());
+            return $this->respond(500, 'Unable to load block history. Please try again.');
+        }
+    }
+
+    public function pageSnapshotHistory(array|string $params = []): Response
+    {
+        $this->checkAuth();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') return $this->respond(405, 'Use GET.')->header('Allow', 'GET');
+        try {
+            if (!is_array($params) || ($params['type'] ?? null) !== 'page') throw new \OutOfBoundsException('Page not found.');
+            $id = filter_var($params['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($id === false) throw new \OutOfBoundsException('Page not found.');
+            $owner = (new QuillPage())->newQuery()->where(['id' => $id, 'deleted_at' => null])->firstModel()
+                ?? throw new \OutOfBoundsException('Page not found.');
+            if (\Quill\services\editor\ExternalPageOverrides::isComponent($owner)) throw new \OutOfBoundsException('Page not found.');
+            $history = new \Quill\services\editor\PageSnapshotHistory();
+            if (isset($_GET['snapshot'])) {
+                $snapshot = filter_var($_GET['snapshot'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                if ($snapshot === false) throw new InvalidArgumentException('Invalid snapshot.');
+                $data = $history->document($owner, $snapshot);
+            } else {
+                $page = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                if ($page === false) throw new InvalidArgumentException('Invalid history page.');
+                $data = $history->listing($owner, $page);
+            }
+            return $this->respond(200, 'Page snapshots loaded.', $data);
+        } catch (\OutOfBoundsException $error) { return $this->respond(404, $error->getMessage()); }
+        catch (InvalidArgumentException|ConversionException|\JsonException $error) { return $this->respond(422, $error->getMessage()); }
+        catch (\DomainException $error) { return $this->respond(409, $error->getMessage()); }
+        catch (Throwable $error) {
+            error_log('Quill page snapshot history failed: ' . $error->getMessage());
+            return $this->respond(500, 'Unable to load page snapshots. Please try again.');
         }
     }
 

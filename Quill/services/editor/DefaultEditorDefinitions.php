@@ -35,11 +35,13 @@ final class DefaultEditorDefinitions implements \event\interfaces\IEventListener
             ['p', 'Paragraph', 'fa-solid fa-paragraph', 'A block of text', 'Write your text here.'],
             ['button', 'Button', 'fa-solid fa-hand-pointer', 'A call to action', 'Button'],
             ['a', 'Link', 'fa-solid fa-link', 'A text link', 'Link'],
+            ['video', 'Video', 'fa-solid fa-video', 'A video player', ''],
             ['img', 'Image', 'fa-solid fa-image', 'An image with an alt description', ''],
             ['hr', 'Divider', 'fa-solid fa-minus', 'Separate your content', ''],
         ] as [$tag, $name, $icon, $description, $content]) {
             $block = new URPCBlock(new URPCBlockDescriptor($tag));
             $block->setBlockContent($content);
+            if ($tag === 'video') $block->setBlockAttributes(['controls' => true]);
             if ($tag === 'img') $block->setBlockAttributes(['alt' => 'Image description']);
             $blocks->add(new BlockDefinition('Quill:' . $tag, $name, $icon, $description, $block, in_array($tag, ['section', 'div', 'hr'], true) ? 'Layout' : 'Content'));
         }
@@ -93,14 +95,14 @@ final class DefaultEditorDefinitions implements \event\interfaces\IEventListener
     private function registerProperties(PropertyRegistry $properties): void
     {
         $base = rtrim($this->assetBase, '/') . '/js/editor/properties/';
-        foreach (['layout' => 'Layout', 'style' => 'Appearance', 'text' => 'Typography', 'heading' => 'Heading', 'list' => 'List', 'table' => 'Table', 'image' => 'Image', 'icon' => 'Icon', 'link' => 'Link', 'clickable' => 'Interactions', 'display' => 'Position', 'motion' => 'Motion', 'connect-data' => 'Connect data', 'advanced' => 'Advanced'] as $key => $label) {
+        foreach (['layout' => 'Layout', 'style' => 'Appearance', 'text' => 'Typography', 'heading' => 'Heading', 'list' => 'List', 'table' => 'Table', 'image' => 'Image', 'video' => 'Video', 'icon' => 'Icon', 'link' => 'Link', 'clickable' => 'Interactions', 'display' => 'Position', 'motion' => 'Motion', 'connect-data' => 'Connect data', 'advanced' => 'Advanced'] as $key => $label) {
             $properties->add(new PropertyDefinition('Quill:' . $key, $key, [$base . $key . '.js'], $base . 'conditions/' . $key . '.js', $label, match ($key) {
                 'display' => 'fa-solid fa-table-cells-large', 'layout' => 'fa-solid fa-layer-group',
                 'style' => 'fa-solid fa-palette', 'text' => 'fa-solid fa-font', 'motion' => 'fa-solid fa-wand-magic-sparkles',
                 'heading' => 'fa-solid fa-heading', 'list' => 'fa-solid fa-list-ul', 'table' => 'fa-solid fa-table',
                 'clickable' => 'fa-solid fa-hand-pointer', 'icon' => 'fa-solid fa-icons',
                 'connect-data' => 'fa-solid fa-database',
-                'link' => 'fa-solid fa-link', 'image' => 'fa-solid fa-image', default => 'fa-solid fa-sliders',
+                'video' => 'fa-solid fa-video', 'link' => 'fa-solid fa-link', 'image' => 'fa-solid fa-image', default => 'fa-solid fa-sliders',
             }));
         }
     }

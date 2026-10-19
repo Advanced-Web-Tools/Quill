@@ -153,8 +153,9 @@
     class QuillAnimationAdapter extends EventTarget {
         constructor(editor, session, element, reportError) {
             super(); const path = editor.selectedPath, snapshot = editor.getSelectedBlock(), documentSnapshot = editor.getDocument();
-            const definitions = editor.properties.all().filter(definition => !['Quill:advanced','Quill:clickable','Quill:link','Quill:image','Quill:icon','Quill:heading','Quill:list','Quill:table','Quill:motion'].includes(definition.key));
+            const definitions = editor.properties.all().filter(definition => !['Quill:advanced','Quill:clickable','Quill:link','Quill:image','Quill:video','Quill:icon','Quill:heading','Quill:list','Quill:table','Quill:motion'].includes(definition.key));
             this.properties = new window.QuillEditorRegistry(definitions); this.type = editor.type;
+            this.mediaLibrary = new window.QuillEditorMediaLibrary(this, editor.mediaLibrary?.providers('image') || []);
             this.modules = editor.modules; this.fonts = editor.fonts; this.selectedPath = path;
             this.styleViewport = editor.styleViewport; this.styleState = 'default'; this.styleScope = 'base'; this.breakpoints = copy(editor.breakpoints);
             this.editingContext = Object.freeze({ type: 'animation', isolated: true });

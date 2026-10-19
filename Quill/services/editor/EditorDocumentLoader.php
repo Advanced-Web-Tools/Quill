@@ -33,6 +33,23 @@ final class EditorDocumentLoader
         return ['document' => $document, 'css' => $result->scopedCss, 'assets' => $result->assets];
     }
 
+    /** Load a frozen page version into the editor without changing the working draft. */
+    public function snapshot(QuillPage $owner, \Quill\models\QuillPageSnapshot $snapshot): array
+    {
+        if ($snapshot->page_id !== $owner->getKey()) throw new \OutOfBoundsException('Version not found.');
+        if ($snapshot->source_type === 'urpc') return (new ExternalPageOverrides())->loadSnapshot($owner, $snapshot);
+        if ($owner->source_type === 'urpc') throw new \DomainException('This version belongs to a different page source.');
+        $source = new \Quill\services\conversion\quillToUrpc\SnapshotQuillContentSource($snapshot);
+        $result = (new QuillToUrpcConverter())->convert($source);
+        $document = $this->grouped($result, $source, $owner);
+        $original = $snapshot->getDocument();
+        $document->settings = $original->settings ?? new \stdClass();
+        $document->settings->title = $snapshot->name;
+        $document->settings->description = $snapshot->description ?? '';
+        $document->assets = $original->assets ?? (object) ['styles' => [], 'scripts' => []];
+        return ['document' => $document];
+    }
+
     /** Restore shared-component wrappers in an isolated external editor transport. */
     public function grouped(\Quill\services\conversion\quillToUrpc\ConversionResult $result, QuillContentSource $source, QuillPage|QuillComponent $owner): \stdClass
     {

@@ -19,8 +19,10 @@ final class ConnectedDataRenderer implements IURPCBlockRenderer
     public function process(IURPCBlock $block, URPC $urpc): void
     {
         $connection = DataConnection::parse($block->getBlockDescriptor()->getBlockProps());
+        if ($connection['inherit']) return;
         foreach ($this->records($connection, $urpc) as $record) {
             $this->apply($block, $connection, $record);
+            $block->setBlockChildren($this->expand(array_values($block->getBlockChildren()), $urpc, 1, $record));
             break;
         }
     }
@@ -35,32 +37,37 @@ final class ConnectedDataRenderer implements IURPCBlockRenderer
         return $document;
     }
 
-    private function expand(array $blocks, URPC $urpc, int $depth = 0): array
+    private function expand(array $blocks, URPC $urpc, int $depth = 0, ?\model\Model $inheritedRecord = null): array
     {
         if ($depth > 128) throw new \LogicException('Maximum connected block depth exceeded.');
         $expanded = [];
         foreach ($blocks as $block) {
             $descriptor = $block->getBlockDescriptor();
-            $copies = [$block];
+            $copies = [[$block, $inheritedRecord]];
             if (ltrim($descriptor->getBlockRenderer(), '\\') === self::class) {
                 $connection = DataConnection::parse($descriptor->getBlockProps());
-                $copies = [];
-                foreach ($this->records($connection, $urpc) as $record) {
-                    $copy = $this->copy($block);
-                    $copy->getBlockDescriptor()->setBlockRenderer('');
-                    $this->apply($copy, $connection, $record);
-                    if ($copies !== []) $this->uniqueIds($copy, ++$this->copyNumber);
-                    $copies[] = $copy;
-                    if ($connection['mode'] !== 'collection') break;
-                }
-                // No records: retain the original authored content, attributes and children.
-                if ($copies === []) {
+                if ($connection['inherit']) {
                     $descriptor->setBlockRenderer('');
-                    $copies[] = $block;
+                    if ($inheritedRecord !== null) $this->apply($block, $connection, $inheritedRecord);
+                } else {
+                    $copies = [];
+                    foreach ($this->records($connection, $urpc) as $record) {
+                        $copy = $this->copy($block);
+                        $copy->getBlockDescriptor()->setBlockRenderer('');
+                        $this->apply($copy, $connection, $record);
+                        if ($copies !== []) $this->uniqueIds($copy, ++$this->copyNumber);
+                        $copies[] = [$copy, $record];
+                        if ($connection['mode'] !== 'collection') break;
+                    }
+                    // A missing independent connection also stops inheritance from an outer record.
+                    if ($copies === []) {
+                        $descriptor->setBlockRenderer('');
+                        $copies[] = [$block, null];
+                    }
                 }
             }
-            foreach ($copies as $copy) {
-                $copy->setBlockChildren($this->expand(array_values($copy->getBlockChildren()), $urpc, $depth + 1));
+            foreach ($copies as [$copy, $record]) {
+                $copy->setBlockChildren($this->expand(array_values($copy->getBlockChildren()), $urpc, $depth + 1, $record));
                 $expanded[] = $copy;
             }
         }
@@ -81,24 +88,61 @@ final class ConnectedDataRenderer implements IURPCBlockRenderer
     {
         $attributes = $block->getBlockAttributes();
         foreach ($connection['set']['attributes'] as $mapping) {
-            $value = $record->getParam($mapping['value']);
+            $value = isset($mapping['route']) ? $this->routeValue($mapping['route'], $record) : $this->composedValue($mapping, $record, $mapping['value']);
             if (!is_scalar($value) || !$this->safeValue($mapping['name'], $value)) continue;
             $attributes[$mapping['name']] = $value;
         }
         $block->setBlockAttributes($attributes);
         $column = $connection['set']['content']['content'];
         if ($column === '' || in_array(strtolower($block->getBlockDescriptor()->getBlockName()), [...DataConnection::VOID_TAGS, 'script', 'style'], true)) return;
+        $value = $this->composedValue($connection['set']['content'], $record, $column);
+        if ($value !== null) {
+            $block->setBlockContent((string) $value);
+            if (!$this->hasInheritedChildren($block)) $block->setBlockChildren([]);
+        }
+    }
+
+    private function hasInheritedChildren(IURPCBlock $block): bool
+    {
+        foreach ($block->getBlockChildren() as $child) {
+            $descriptor = $child->getBlockDescriptor();
+            if (ltrim($descriptor->getBlockRenderer(), '\\') === self::class) {
+                if (($descriptor->getBlockProps()['inherit'] ?? false) === true) return true;
+                continue;
+            }
+            if ($this->hasInheritedChildren($child)) return true;
+        }
+        return false;
+    }
+
+    private function composedValue(array $mapping, \model\Model $record, string $column): mixed
+    {
+        $fields = [$column, ...($mapping['additional'] ?? [])];
+        $before = $mapping['before'] ?? ''; $after = $mapping['after'] ?? '';
+        if (count($fields) === 1 && $before === '' && $after === '') {
+            $value = $record->getParam($column);
+            return is_scalar($value) ? $value : null;
+        }
         $parts = []; $found = false;
-        foreach ([$column, ...($connection['set']['content']['additional'] ?? [])] as $field) {
+        foreach ($fields as $field) {
             $value = $record->getParam($field);
             if (!is_scalar($value)) continue;
             $found = true;
             if ((string) $value !== '') $parts[] = (string) $value;
         }
-        if ($found) {
-            $block->setBlockContent($connection['set']['content']['before'] . implode(' ', $parts) . $connection['set']['content']['after']);
-            $block->setBlockChildren([]);
+        return $found ? $before . implode(($mapping['with_spaces'] ?? true) ? ' ' : '', $parts) . $after : null;
+    }
+
+    private function routeValue(array $route, \model\Model $record): ?string
+    {
+        $segments = explode('/', $route['path']);
+        foreach ($segments as &$segment) {
+            if (!preg_match('/^\{([^}]+)\}$/D', $segment, $match)) continue;
+            $value = $record->getParam($route['parameters'][$match[1]]);
+            if (!is_scalar($value) || (string) $value === '') return null;
+            $segment = rawurlencode((string) $value);
         }
+        return implode('/', $segments);
     }
 
     private function safeValue(string $attribute, mixed $value): bool

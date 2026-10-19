@@ -35,8 +35,11 @@
     <script src="@asset('js/quill-actions-runtime.js')" defer></script>
     <script src="@asset('js/quill-editor-actions.js')" defer></script>
     <script src="@asset('js/quill-editor-components.js')" defer></script>
+    <script src="@asset('js/quill-editor-block-history.js')" defer></script>
     <script src="@asset('js/quill-editor-block-toolbar.js')" defer></script>
     <script src="@asset('js/quill-editor-settings.js')" defer></script>
+    <script src="@asset('js/quill-editor-shortcuts.js')" defer></script>
+    <script src="@asset('js/quill-editor-media-library.js')" defer></script>
     <script src="@asset('js/quill-editor.js')" defer></script>
 </head>
 <body>
@@ -67,6 +70,7 @@
         'animationUrl' => '/dashboard/quill/editor-animation',
         'paletteUrl' => '/dashboard/quill/editor-color-palette',
         'lockVersion' => $editorVersion ?? 1,
+        'mediaLibraries' => $editorMediaLibraries ?? [],
         'extensions' => $editorExtensions ?? ['blocks' => [], 'properties' => []],
     ];
 @endphp
@@ -99,9 +103,13 @@
                 <div id="editor-page-routes" class="editor-page-routes" hidden>
                     <h3>Page addresses</h3><p class="editor-group-description">Choose an existing route or create an address for this page.</p>
                     <div id="editor-page-route-list" aria-label="Routes opening this page"></div>
-                    <label for="editor-page-route-select">Connect a route</label><select id="editor-page-route-select"><option value="">Choose a route…</option></select>
-                    <button type="button" id="editor-page-route-new" aria-haspopup="dialog" aria-controls="editor-route-dialog"><i class="fa-solid fa-plus" aria-hidden="true"></i> New route</button>
+                    <label for="editor-page-route-select">Connect a route</label>
+                    <div class="editor-page-route-connect"><select id="editor-page-route-select"><option value="">Choose a route…</option></select><button type="button" id="editor-page-route-new" aria-haspopup="dialog" aria-controls="editor-route-dialog"><i class="fa-solid fa-plus" aria-hidden="true"></i> New route</button></div>
                     <p class="editor-group-description">Route changes apply immediately. Page content uses Save draft or Publish.</p><p id="editor-page-route-status" role="status"></p>
+                </div>
+                <div id="editor-page-snapshots" class="editor-page-routes" hidden>
+                    <h3>Snapshots</h3><p class="editor-group-description">Browse published versions and restore a snapshot into the editor. Save or publish to keep the restored version.</p>
+                    <button type="button" id="editor-page-snapshots-open" aria-haspopup="dialog" aria-controls="editor-page-history"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Version history</button>
                 </div>
             </section></div>
             <footer><a href="{{ (($editorType ?? 'page') === 'component' || ($editorExternalSourceKind ?? '') === 'component') ? '/dashboard/quill/components' : '/dashboard/quill' }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to dashboard</a></footer>
@@ -223,6 +231,23 @@
         <datalist id="studio-animated-properties"><option value="opacity"><option value="translate"><option value="rotate"><option value="scale"><option value="transform-origin"><option value="border-radius"><option value="background-color"><option value="background-image"><option value="filter"><option value="box-shadow"><option value="width"><option value="padding"></datalist>
     </dialog>
     <dialog id="studio-close-confirm" class="editor-settings-dialog" aria-labelledby="studio-close-title"><header class="editor-action-dialog-header"><h2 id="studio-close-title">Save animation changes?</h2></header><p class="studio-confirm-description">Save this animation, discard your changes, or keep editing.</p><footer class="editor-action-dialog-footer"><button type="button" data-studio-continue autofocus>Continue Editing</button><button type="button" data-studio-discard>Discard</button><button type="button" class="button-primary" data-studio-save>Save</button></footer></dialog>
+    <dialog id="editor-block-history" class="editor-settings-dialog editor-block-history" aria-labelledby="editor-block-history-title" aria-describedby="editor-block-history-context">
+        <header class="editor-action-dialog-header"><div><h2 id="editor-block-history-title">Version history</h2><p id="editor-block-history-context" data-history-context></p></div><button type="button" class="editor-action-icon" data-history-close aria-label="Close version history" autofocus><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
+        <p class="editor-block-history-hint">Restore this block and its saved children. Older versions restore properties only. Save the document to keep the restored version.</p>
+        <ol data-history-list class="editor-block-history-list" aria-label="Saved block versions"></ol>
+        <footer class="editor-action-dialog-footer editor-block-history-pagination"><button type="button" class="editor-action-icon" data-history-prev aria-label="Newer versions" title="Newer versions" disabled><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><span data-history-count role="status">Showing 0 of 0</span><button type="button" class="editor-action-icon" data-history-next aria-label="Older versions" title="Older versions" disabled><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></footer>
+    </dialog>
+    <dialog id="editor-page-history" class="editor-settings-dialog editor-block-history" aria-labelledby="editor-page-history-title" aria-describedby="editor-page-history-context">
+        <header class="editor-action-dialog-header"><div><h2 id="editor-page-history-title">Page snapshots</h2><p id="editor-page-history-context" data-history-context></p></div><button type="button" class="editor-action-icon" data-history-close aria-label="Close page snapshots" autofocus><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
+        <p class="editor-block-history-hint">Restore the whole page into the editor, including its settings and blocks. You can undo the restore. Save or publish to keep it.</p>
+        <ol data-history-list class="editor-block-history-list" aria-label="Saved page snapshots"></ol>
+        <footer class="editor-action-dialog-footer editor-block-history-pagination"><button type="button" class="editor-action-icon" data-history-prev aria-label="Newer versions" title="Newer versions" disabled><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><span data-history-count role="status">Showing 0 of 0</span><button type="button" class="editor-action-icon" data-history-next aria-label="Older versions" title="Older versions" disabled><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></footer>
+    </dialog>
+    <dialog id="editor-shortcuts-dialog" class="editor-settings-dialog editor-shortcuts-dialog" aria-labelledby="editor-shortcuts-title" aria-describedby="editor-shortcuts-description">
+        <header class="editor-action-dialog-header"><h2 id="editor-shortcuts-title">Edit shortcuts</h2><button type="button" class="editor-action-icon" data-close-shortcuts aria-label="Close shortcuts" autofocus><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
+        <div class="editor-settings-body"><p id="editor-shortcuts-description" class="editor-settings-note">Focus a shortcut and press a key combination. Copy, cut and paste apply to selected blocks; text fields keep their usual shortcuts.</p><div data-shortcuts-list></div><p data-shortcuts-status class="editor-settings-note" role="status"></p></div>
+        <footer class="editor-action-dialog-footer"><button type="button" data-reset-shortcuts>Reset defaults</button><button type="button" class="button-primary" data-close-shortcuts>Done</button></footer>
+    </dialog>
     <dialog id="editor-settings-dialog" class="editor-settings-dialog" aria-labelledby="editor-settings-title" aria-describedby="editor-settings-storage-note">
         <header class="editor-action-dialog-header"><h2 id="editor-settings-title">Editor settings</h2><button type="button" class="editor-action-icon" data-close-settings aria-label="Close editor settings"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></header>
         <div class="editor-settings-body">
@@ -231,6 +256,7 @@
             <div class="editor-settings-row"><label for="editor-settings-save-method">Default save method<small>Action for the main save button when opening the editor.</small></label><select id="editor-settings-save-method"><option value="draft">Save draft</option><option value="publish">Publish</option></select></div>
             <div class="editor-settings-row"><label for="editor-settings-autosave">Auto save<small>Save changes as a draft. Publish stays manual.</small></label><input id="editor-settings-autosave" type="checkbox" role="switch" aria-controls="editor-settings-interval-row"></div>
             <div class="editor-settings-row" id="editor-settings-interval-row" hidden><label for="editor-settings-interval">Save every</label><div class="editor-settings-interval"><input id="editor-settings-interval" type="number" min="10" max="3600" step="1" value="60" required aria-describedby="editor-settings-interval-unit" disabled><span id="editor-settings-interval-unit">seconds</span></div></div>
+            <div class="editor-settings-row editor-settings-shortcuts"><label for="editor-shortcuts-open">Shortcuts<small>Customize keyboard commands for this browser.</small></label><button type="button" id="editor-shortcuts-open" aria-haspopup="dialog" aria-expanded="false" aria-controls="editor-shortcuts-dialog"><i class="fa-solid fa-keyboard" aria-hidden="true"></i> Edit shortcuts</button></div>
             <p id="editor-settings-storage-note" class="editor-settings-note" role="status">Preferences are saved in this browser and apply to all Quill documents.</p>
         </div>
         <footer class="editor-action-dialog-footer"><button type="button" class="button-primary" data-close-settings>Done</button></footer>

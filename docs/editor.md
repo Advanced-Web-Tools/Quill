@@ -6,7 +6,7 @@ The editor combines a top bar, a narrow navigation rail, a block tree, an iframe
 
 The left rail opens Add block, Components, Page Styling, Page Actions and Color palettes. Page settings and Editor settings sit together at the bottom. Opening a destination closes the other left-side panel.
 
-Page settings contains the page title, description and connected routes. Title changes appear in the top bar and are saved as Dashboard metadata. Styling controls page spacing, background and default font through `settings.styles`; blocks inherit the page font unless they define their own. Title and description use `settings.title` and `settings.description`. These edits preserve other settings and participate in dirty tracking, Undo/Redo, saving and snapshots. Root page styles generate body CSS; nested component page styles do not replace host-page styling.
+Page settings contains the page title, description, connected routes and page snapshots. Title changes appear in the top bar and are saved as Dashboard metadata. Styling controls page spacing, background and default font through `settings.styles`; blocks inherit the page font unless they define their own. Title and description use `settings.title` and `settings.description`. These edits preserve other settings and participate in dirty tracking, Undo/Redo, saving and snapshots. Root page styles generate body CSS; nested component page styles do not replace host-page styling.
 
 The route list can connect an existing database route or create one without leaving the editor. URL segment editing is shared with the dashboard through `quill-route-builder.js`; existing endpoints handle validation, CSRF and reassignment. Moving another page's route requires confirmation. Route changes apply immediately, outside document JSON, page undo history and publication state. The updated routes and parameters become available to link and data controls.
 
@@ -76,7 +76,7 @@ Transforms include Move X/Y, Rotate, linked Scale X/Y, a 3×3 origin grid and ad
 
 Color controls share Coloris, palette buttons and theme styling. Empty/transparent paint has a decorative droplet-slash indicator and accessible description; it does not assign a fallback color. Palette choices update swatches immediately. Coloris is mounted in the active dialog so it remains interactive above the modal backdrop.
 
-Background supports a paint swatch, an image URL dialog, Auto/Cover/Contain and position presets or manual offsets. Image controls appear when an image is present; URL changes update the canvas. This workflow does not include a media upload API.
+Background supports a paint swatch, a media provider/URL popup, Auto/Cover/Contain and position presets or manual offsets. Provider tabs precede the final URL tab; without registered image providers the popup shows only URL controls and an empty-provider message. Image and video selections open their media property category with a provider dropdown and URL fallback. See [Media libraries](media-library.md) for registration and provider modules.
 
 Corner radius has four spatial corner buttons, a central lock and a value input. Its preview reflects current corner values. Gradient controls support Linear/Radial/Conic, angles, ordered color stops, alpha, preview and direct CSS entry. Text and background gradients are separate layers and can combine with background images. Use solid color restores ordinary paint; Reset removes the active-scope override. Border gradients use `border-image`, whose square edges do not follow corner radius.
 
@@ -182,6 +182,49 @@ Editor settings provides default preview device, System/Light/Dark appearance, d
 
 Preferences use browser localStorage key `awt.quill.editor.preferences.v1`, outside document JSON, Undo history and server state. Without storage, they apply for the current session. Escape/Close/Done returns focus to the settings control. Default preview does not change responsive editing scope; theme choice affects editor chrome and overlays.
 
+## Block version history
+
+Select a regular block, open the floating toolbar's **More block options → Version history** menu, then browse saved changes ten at a time. Each entry shows the author's circular profile picture when present, “Firstname Lastname has changed this on date”, and the version below. The popup shares the editor's light/dark surfaces and Font Awesome close, restore and pagination controls; icon buttons have transparent backgrounds until hovered. Deleted authors fall back to their admin ID.
+
+New block versions store the entire subtree. Restore replaces the block’s properties and saved descendants, including their order, content and mappings, as one Undo/Redo change. Each child also keeps its own independent version history. Legacy versions without a child list restore properties only and preserve current children. If a saved child has moved outside the subtree, restore leaves the document unchanged and asks to move it back or remove it first, preventing duplicate identities. Save the document to persist the restored state. Shared component content is managed from its component editor. Its floating toolbar keeps the options dropdown, omits Version history, and replaces Convert to component with Convert to block using the existing detach operation. External component references keep their existing conversion restriction. History begins with the first save after this feature is installed; earlier publish snapshots remain available through document history.
+
+The additive `quill_block_revision` migration runs through the existing package install/update lifecycle. Entries are scoped to a page or component and a stable editor identity (provider UID for external documents). Successful draft saves and publishes record changed blocks and ancestor subtrees within the owner's optimistic-lock transaction. Changes to a descendant, insertion, deletion or reordering create an ancestor revision. Unchanged trees, reopened metadata defaults and generated style scope classes do not create additional revisions. The existing JSON history column stores child trees without a schema migration. Failed saves and conflicts retain the existing history. The existing published snapshot tables and manifests continue to serve document publishing and restoration.
+
+Targeted checks:
+
+```sh
+php tests/block_history.php
+python3 tests/block_history_browser.py /tmp/quill-block-history.png
+```
+
+## Keyboard shortcuts
+
+At the bottom of **Editor settings**, **Shortcuts → Edit shortcuts** opens the editor-styled popup. Focus a field and press a combination to change it; the × beside a field clears that binding. Duplicate combinations are rejected. Reset defaults restores the following mappings; Ctrl becomes Cmd on macOS:
+
+| Action | Default |
+| --- | --- |
+| Publish | Ctrl+Shift+S |
+| Save draft | Ctrl+S |
+| Undo / Redo | Ctrl+Z / Ctrl+Shift+Z |
+| Copy / Paste / Cut | Ctrl+C / Ctrl+V / Ctrl+X |
+| Delete | Delete |
+| Copy style | Ctrl+Alt+C |
+| Open actions | Ctrl+Alt+A |
+| Open animations | Ctrl+Alt+M |
+| Duplicate | Ctrl+D |
+
+Preferences live under browser localStorage key `awt.quill.editor.shortcuts.v1`, outside the saved document and Undo history. Without storage, changes apply for the session. Shortcuts work in the shell and canvas, including after iframe reloads. Text fields and inline text retain native editing shortcuts; Save draft and Publish still work while editing text. Open dialogs and canvas target picking suspend document shortcuts.
+
+Copy/cut/paste use a block clipboard for the current editor session. Paste inserts after the selected block, or into the main section with no selection, and renews block identities and copied HTML IDs. Cut and paste are separate undoable steps. Shared component references keep the existing source-editing restrictions. Opening Animation Studio follows its existing page/selection requirements.
+
+Shortcut actions show the editor's toast feedback. Copy, paste, cut, Undo and Redo confirm completion; Undo/Redo buttons share that feedback. Save/publish report success only after the save completes; failures keep the existing error handling. Run `python3 tests/shortcuts_browser.py /tmp/quill-shortcuts.png` for the focused Chrome checks.
+
+## Editor access
+
+Quill dashboard navigation and all private pages, editor/preview routes and API actions require `Admin::checkAuthentication()` followed by `Admin::checkPermission(3)`. Quill's local `QuillControllerBase` owns this check. Unauthenticated requests receive HTTP 401 JSON and insufficient permissions receive HTTP 403 JSON, without redirecting to `/dashboard/login`. Access is checked at each action rather than during controller construction. Public published-page routes use their existing rendering controller.
+
+Run `php tests/quill_access.php` to verify every private action rejects unauthenticated and insufficient-permission requests and that permission levels 0–3 can pass the shared guard.
+
 ## Implementation and verification
 
 State, canvas, viewport, properties, registry/module loading, tree, picker, API, history and saving live in separate `quill-editor-*.js` collaborators. `quill-editor.js` wires them together. Built-in controls are registered modules under `js/editor/properties/`; package integrations use the same [extension API](editor-extensions.md).
@@ -201,3 +244,32 @@ python3 tests/detach_component_browser.py
 ```
 
 PHP suites use real models/controllers with isolated SQLite databases. Chrome suites use a temporary profile and local fixtures; save responses are simulated there, while PHP verifies persistence, CSRF, conflicts and rollback. Configure `CHROME_BIN`, `AWT_FRAMEWORK_CLASSES` and `URPC_PACKAGE_ROOT` when needed. The [data](connect-data.md), [animation](animation-studio.md) and [palette](color-palettes.md) guides list additional focused checks.
+
+
+### Page settings: routes and snapshots
+
+Each connected route has a discreet Font Awesome unlink button. Deactivation
+sets its page association to null through the existing CSRF-protected route update
+endpoint. The route remains in the route catalog and can be connected again.
+Connected route parameters refresh immediately for Connect data; failed requests
+keep the existing connection visible.
+
+**Snapshots → Version history** opens the same popup design as block version
+history: circular author pictures when available, author/date sentence, version
+below, ten newest entries per page and transparent pagination buttons with the
+Showing count between them. Snapshots use existing publish snapshots and manifests;
+Publish creates a new snapshot, while Save draft keeps its existing behavior.
+
+Restore loads the selected frozen page tree, assets and settings into the editor
+as an unsaved change. It supports one-step Undo/Redo and does not change the live
+page, draft database rows or optimistic lock until Save/Publish. External page
+snapshots use the UID override pipeline against the current provider source.
+The read-only `/dashboard/quill/document/page/{id}/snapshot-history` endpoint
+supports paginated listings and `?snapshot={id}` transport loading, checks permission
+3, and scopes both queries to the current nondeleted page. Snapshot JSON is loaded
+only on restore, keeping list responses small. No database migration is required.
+
+Verification: `php tests/block_history.php`, `python3 tests/block_history_browser.py`
+and `php tests/quill_access.php` cover snapshot manifests, page isolation, author
+metadata, pagination, draft restore/Undo/Redo, route deactivation/reconnection and
+private endpoint authentication.

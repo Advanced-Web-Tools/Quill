@@ -168,6 +168,19 @@ final class ExternalPageOverrides
         $document=(new EditorDocumentLoader())->grouped($result,new EditorContentSource($source['document'],$source['blocks'],$page),$page); $document->settings=$settings; $document->assets=$assets;
         return ['document'=>$document,'css'=>$result->scopedCss,'assets'=>$result->assets,'sourceRevision'=>$revision,'sourceKey'=>$definition->key,'warnings'=>$source['warnings']??[]];
     }
+    public function loadSnapshot(QuillPage $page, QuillPageSnapshot $snapshot): array
+    {
+        if ($snapshot->page_id !== $page->getKey() || $snapshot->source_type !== 'urpc' || $snapshot->source_key !== $page->source_key) throw new \OutOfBoundsException('Override version not found.');
+        $source = $this->apply($this->source($this->definition($page)), $this->records($snapshot));
+        $saved = $snapshot->getDocument();
+        $settings = $saved->settings ?? new \stdClass(); $settings->title = $snapshot->name; $settings->description = $snapshot->description ?? '';
+        $assets = $saved->assets ?? (object) ['styles' => [], 'scripts' => []];
+        $result = $this->conversion($source, $settings, $assets, $page);
+        $document = (new EditorDocumentLoader())->grouped($result, new EditorContentSource($source['document'], $source['blocks'], $page), $page);
+        $document->settings = $settings; $document->assets = $assets;
+        return ['document' => $document];
+    }
+
     /** Public by default: drafts never leak when there is no published override set. */
     public function render(ExternalDocument $definition, ?QuillPage $page=null, bool $draft=false, string $kind='page'): ConversionResult
     {
@@ -234,7 +247,7 @@ final class ExternalPageOverrides
                 $records[$uid]->changes=$changes;
             }
         }
-        return $this->persist($page,$records,$mapped->document->settings,$mapped->document->assets,$version,$mode,$adminId);
+        return $this->persist($page,$records,$mapped->document->settings,$mapped->document->assets,$version,$mode,$adminId,$input);
     }
     public function restore(QuillPage $page, QuillPageSnapshot $snapshot, int $version, int $adminId): void
     {
@@ -242,10 +255,11 @@ final class ExternalPageOverrides
         $doc=$snapshot->getDocument(); $settings=$doc->settings??new \stdClass(); $settings->title=$snapshot->name; $settings->description=$snapshot->description??'';
         $this->persist($page,$this->records($snapshot),$settings,$doc->assets??(object)['styles'=>[],'scripts'=>[]],$version,'draft',$adminId);
     }
-    private function persist(QuillPage $page, array $records, \stdClass $settings, \stdClass $assets, int $version, string $mode, int $adminId): array
+    private function persist(QuillPage $page, array $records, \stdClass $settings, \stdClass $assets, int $version, string $mode, int $adminId, ?\stdClass $historyDocument = null): array
     {
-        return $page->transaction(function()use($page,$records,$settings,$assets,$version,$mode,$adminId):array {
+        return $page->transaction(function()use($page,$records,$settings,$assets,$version,$mode,$adminId,$historyDocument):array {
             if(!$page->table('quill_page')->where(['id'=>$page->getKey(),'lock_version'=>$version,'source_type'=>'urpc','source_key'=>$page->source_key,'deleted_at'=>null])->update(['lock_version'=>$version+1,'updated_at'=>date('Y-m-d H:i:s')]))throw new \DomainException('This page changed. Reload before saving.');
+            if ($historyDocument) (new BlockVersionHistory())->capture($page, $historyDocument, $adminId);
             $ids=[]; $rows=[]; $old=$this->records($page); $oldIds=[];
             foreach($page->getDocument()->sections??[] as $section)foreach($section->blocks??[] as $id) {
                 $model=(new QuillBlock())->useConnectionFrom($page)->newQuery()->where(['id'=>$id,'deleted_at'=>null])->firstModel(); if($model)$oldIds[$model->urpc_uid]=$id;

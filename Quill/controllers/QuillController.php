@@ -2,7 +2,6 @@
 
 namespace Quill\controllers;
 
-use Dashboard\api\page\DashboardControllerBase;
 use DOMException;
 use Quill\models\collections\QuillComponentCollection;
 use Quill\models\collections\QuillDynamicRouteCollection;
@@ -14,21 +13,18 @@ use response\Response;
 use view\View;
 use Quill\services\editor\EditorExtensionLoader;
 
-final class QuillController extends DashboardControllerBase
+final class QuillController extends QuillControllerBase
 {
     public string $name = 'Quill';
     public string $navigation;
     public string $token;
-    public function __construct()
-    {
-        $this->checkAuth();
-    }
 
     /**
      * @throws DOMException
      */
     public function index(array|string $params): View
     {
+        $this->checkAuth();
         $params['name'] = $this->name;
         $nav = $this->buildNavigation();
         $params['navigation'] = $nav;
@@ -54,6 +50,7 @@ final class QuillController extends DashboardControllerBase
      */
     public function routes(array $params): View
     {
+        $this->checkAuth();
         $params['name'] = $this->name;
         $nav = $this->buildNavigation();
         $params['navigation'] = $nav;
@@ -77,6 +74,7 @@ final class QuillController extends DashboardControllerBase
      */
     public function components(array $params): View
     {
+        $this->checkAuth();
         $params['name'] = $this->name;
         $nav = $this->buildNavigation();
         $params['navigation'] = $nav;
@@ -96,6 +94,7 @@ final class QuillController extends DashboardControllerBase
      */
     public function editor(array $params): View|Response
     {
+        $this->checkAuth();
         $params['name'] = $this->name;
         $type = $params['type'] ?? 'page';
         if (!in_array($type, ['page', 'component'], true)) {
@@ -127,12 +126,14 @@ final class QuillController extends DashboardControllerBase
         $params['editorComponents'] = (new \Quill\services\editor\EditorComponentLibrary())->all();
         $resources = new \Quill\services\editor\ExternalResources();
         $params['editorExternalComponents'] = array_map(static fn($definition) => $definition->summary(), $resources->components($this->eventDispatcher)->all());
+        $params['editorMediaLibraries'] = array_map(static fn($provider) => $provider->summary(), $resources->mediaLibraries($this->eventDispatcher)->all());
         $params['editorExtensions'] = (new EditorExtensionLoader())->load($this->eventDispatcher);
         return $this->view($params);
     }
 
     public function templates(array $params = []): View
     {
+        $this->checkAuth();
         $params['name'] = $this->name;
         $params['navigation']=$this->buildNavigation();$params['tab']='Templates';
         $params['templates']=(new \Quill\services\editor\PageLibrary())->templates((new \admin\Admin())->getKey());
@@ -141,6 +142,7 @@ final class QuillController extends DashboardControllerBase
 
     public function history(array $params): View|Response
     {
+        $this->checkAuth();
         $params['name'] = $this->name;
         $id=filter_var($params['id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $page=$id===false?null:(new QuillPage())->newQuery()->where(['id'=>$id,'deleted_at'=>null])->firstModel();

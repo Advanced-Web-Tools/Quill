@@ -16,7 +16,22 @@
                 const list = get('editor-page-route-list'); list.replaceChildren(); select.replaceChildren(new Option('Choose a route…', ''));
                 for (const route of [...routes].sort((a,b)=>a.path.localeCompare(b.path))) {
                     if (route.page_id === pageId) {
-                        const item = document.createElement('code'); item.className = 'editor-page-route'; item.textContent = route.path; list.append(item);
+                        const row = document.createElement('div'); row.className = 'editor-page-route-row';
+                        const item = document.createElement('code'); item.className = 'editor-page-route'; item.textContent = route.path;
+                        const deactivate = window.QuillEditorIcon.set(document.createElement('button'), 'link-slash');
+                        deactivate.type = 'button'; deactivate.className = 'editor-action-icon'; deactivate.disabled = busy;
+                        deactivate.title = deactivate.ariaLabel = `Deactivate ${route.path} for this page`;
+                        deactivate.addEventListener('click', async () => {
+                            if (busy) return;
+                            editor.state.assertAvailable(); setBusy(true); status.textContent = '';
+                            try {
+                                await request('/dashboard/quill/update/route', window.QuillRouteBuilder.segments(route.path), route.id, null);
+                                synchronize({...route, page_id: null, page_name: null});
+                                status.textContent = `Deactivated ${route.path} for this page.`; editor.notify?.('Route deactivated.');
+                            } catch (error) { status.textContent = error.message; }
+                            finally { setBusy(false); }
+                        });
+                        row.append(item, deactivate); list.append(row);
                     } else select.add(new Option(route.path + (route.page_id ? ` · ${route.page_name || 'Another page'}` : ' · Not connected'), String(route.id)));
                 }
                 if (!list.childNodes.length) { const hint = document.createElement('p'); hint.className = 'editor-group-description'; hint.textContent = 'No address connected yet.'; list.append(hint); }
@@ -29,8 +44,8 @@
                 editor.dataRoutes = Object.freeze(routes.filter(item=>item.page_id===pageId).map(item=>Object.freeze({path:item.path,parameters:window.QuillRouteBuilder.segments(item.path).filter(part=>part.type==='param').map(part=>part.value)})));
                 editor.dispatchEvent(new Event('routeschange')); render();
             };
-            const request = async (url, segments, id = null) => {
-                const body = new FormData(get('editor-csrf')); body.set('page_id', String(pageId));
+            const request = async (url, segments, id = null, destination = pageId) => {
+                const body = new FormData(get('editor-csrf')); body.set('page_id', destination === null ? '' : String(destination));
                 if (id !== null) body.set('id', String(id));
                 segments.forEach((segment,index)=>{body.set(`segments[${index}][type]`,segment.type);body.set(`segments[${index}][value]`,segment.value);});
                 const response = await fetch(url,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json'},body});

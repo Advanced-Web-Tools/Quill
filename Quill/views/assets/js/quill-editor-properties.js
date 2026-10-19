@@ -11,6 +11,7 @@
         #mounted = new Map();
         #ticket = 0;
         #activeCategory = null;
+        #selectionPath = null;
         #subscriptions = [];
         #abort = new AbortController();
 
@@ -135,6 +136,11 @@
                     if (this.#panels.children[categoryPosition] !== category.panel) this.#panels.insertBefore(category.panel, this.#panels.children[categoryPosition] || null);
                     categoryPosition++;
                 }
+            }
+            if (path !== this.#selectionPath) {
+                const mediaCategory = { img: 'image', video: 'video' }[block?.descriptor.name.toLowerCase()];
+                if (categoryKeys.has(mediaCategory)) this.#activeCategory = mediaCategory;
+                this.#selectionPath = path;
             }
             if (!categoryKeys.has(this.#activeCategory)) this.#activeCategory = entries[0]?.definition.category ?? null;
             this.#activate(this.#activeCategory);

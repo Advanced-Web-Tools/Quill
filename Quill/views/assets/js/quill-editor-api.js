@@ -159,6 +159,7 @@
             const block = this.getBlock(path);
             this.#styleClipboard = structuredClone({ inline: block.attributes.style || '', styles: block.styles || {} });
             this.dispatchEvent(new Event('styleclipboardchange'));
+            this.notify?.('Style copied.');
         }
         pasteStyle(path = this.selectedPath) {
             if (!this.#styleClipboard) throw new Error('Copy a block style first.');
@@ -168,9 +169,10 @@
             const styles = structuredClone(this.#styleClipboard.styles);
             const responsive = Object.entries(styles).some(([group, values]) => /^(desktop|tablet|mobile)(:|$)/.test(group) && Object.keys(values).length);
             this.state.updateBlock(path, { attributes, _quill: { ...raw._quill, styles } }, 'properties', responsive ? { breakpoints: this.breakpoints } : null);
+            this.notify?.('Style pasted.');
         }
-        duplicateBlock(path = this.selectedPath) { return this.state.duplicateBlock(path); }
-        removeBlock(path = this.selectedPath) { return this.state.removeBlock(path); }
+        duplicateBlock(path = this.selectedPath) { const result = this.state.duplicateBlock(path); this.notify?.('Block duplicated.'); return result; }
+        removeBlock(path = this.selectedPath) { const result = this.state.removeBlock(path); this.notify?.('Block deleted.'); return result; }
 
         setContent(content, path = this.selectedPath) { this.updateBlock({ content }, path); }
         setProps(props, path = this.selectedPath) { this.updateBlock({ descriptor: { ...this.getBlock(path).descriptor, props } }, path); }

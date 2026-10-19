@@ -19,11 +19,36 @@ Choose one record-selection mode:
   block. Other counts display a notice that the block and its nested content are
   repeated for each record.
 
-**Fill this block** maps a database column to its text content, or maps columns
-to named attributes such as `src`, `alt`, `href` and `title`. Selecting text
-content replaces the block's full content, including any inline children, only
-on the rendered working copy. Leave it unmapped to keep nested content. Void
-blocks, including images, offer attribute mapping without text content.
+**Fill this block** lists **This block** and its existing children, including
+nested children. Choose an individual child to edit its own text and attribute
+mappings. Switching children preserves each mapping; moving a child preserves its
+identity in the selector. Blocks with their own independent connection or a shared
+component are marked **Edit separately**.
+
+The parent chooses the source, filters and record-selection mode. Every mapped
+child receives the same matched record in **Single value**, **From route** and
+**Collection**. Collections repeat the parent tree once per record and fill each
+child from that record. Selecting an inherited child directly on the canvas also
+shows its parent’s source settings and its own mappings. No extra query runs for
+each child. Missing parent records leave the entire authored fallback tree intact.
+
+Attribute names offer the ten most common choices for the selected HTML element.
+**Others** opens a searchable submenu with the remaining HTML/ARIA and existing
+attributes. Choose **Custom attribute…** for another attribute. Existing
+restrictions on event handlers, editor-reserved attributes, `style`, `srcdoc` and
+`srcset` remain. Void blocks, including images, offer attribute mapping without
+text content.
+
+Text mapping replaces the block’s content on the rendered working copy. When
+there are individually mapped descendants, those children are preserved and
+filled independently. Otherwise, existing full-content replacement behavior,
+including replacement of inline children, is retained. Leave text unmapped to
+keep the authored content.
+
+Inherited child descriptors store the same renderer with
+`props: {inherit: true, set: {...}}`. They store their own mappings and reuse the
+nearest enclosing independent connection’s record, without copying its source or
+query settings. Independent nested connections establish their own record scope.
 
 The editor canvas always displays the original design. Missing sources, removed
 columns, absent records and null values retain authored fallback content and
@@ -37,11 +62,47 @@ JSON or snapshots. Published pages read current source data at render time.
 
 Use **+** in the content mapping to add ordered fields. The first column is stored
 in `set.content.content`; extra columns use `set.content.additional`. Runtime joins
-nonempty scalar values with a space. Optional `set.content.before` and
+nonempty scalar values with a space by default. The **With spaces** checkbox
+controls `set.content.with_spaces` (boolean, default `true`); disable it to join
+without separators. Optional `set.content.before` and
 `set.content.after` strings surround the resolved text and preserve authored
 spaces. Empty scalar values remain valid; if none of the mapped fields resolves
 to a scalar value, authored fallback content is retained. Empty affixes are
 omitted by the editor.
+
+### Attribute composition and route links
+
+Each ordinary attribute mapping has **Value from**, a **+** control for ordered
+additional fields, **Before**, **After**, and **With spaces**. It stores
+`{name, value, additional?, before?, after?, with_spaces?}`. Affixes wrap the
+combined result, matching text content. Empty pieces are skipped, while zero
+values remain valid. When every selected field is missing or null, the authored
+attribute remains unchanged. A single unwrapped field preserves its scalar
+type, including boolean values, for compatibility with existing mappings.
+
+For `href`, **Href destination** offers the registered route catalog and
+**From fields / custom URL**. Choosing a route replaces the URL composer with
+a database-field dropdown for each parameter. Static routes need no mapped
+fields. Incomplete route mappings are not committed. Route configuration uses:
+
+```json
+{
+  "name": "href",
+  "value": "",
+  "route": {
+    "path": "/people/{slug}/{id}",
+    "parameters": { "slug": "slug", "id": "id" }
+  }
+}
+```
+
+Runtime fills parameters from the current record and URL-encodes each value as
+one path segment. Missing/null/empty parameters keep the authored `href`; zero
+is valid. Route destinations cannot contain a scheme, query string or fragment.
+Ordinary href composition remains available for manually composed addresses,
+including Before/After. Existing URL-scheme validation also applies to composed
+attribute values. Removed additional fields and route-parameter columns follow
+the existing missing-column fallback behavior.
 
 During rich-text editing, **Connect text to database** mounts these same mapping
 and filter controls in a temporary popup. Apply connects the selected fragment or
@@ -227,3 +288,16 @@ between cards, and a nested group rail. The preview follows draft changes and
 never executes a query or commits a property. Applied counts, draft feedback,
 keyboard controls, and the existing Apply/Cancel workflow remain available in
 both themes.
+
+## Attribute mapping verification
+
+```sh
+php tests/connected_attributes.php
+python3 tests/connected_attributes_browser.py /tmp/quill-connected-attributes.png
+```
+
+These checks cover legacy mappings, composition/affixes/spacing, static and
+parameterized routes, URL encoding, scalar and missing-value behavior, SQL column
+validation, save conversion, top-ten/Others/custom selectors, editor remounts,
+individual child mappings in all three modes, direct canvas selection and child
+reordering/removal.

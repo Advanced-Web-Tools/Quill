@@ -123,6 +123,17 @@ class Migration
                 $this->createdAt(),
             ],
 
+            // Editor history is scoped to its owner; published snapshot manifests stay immutable.
+            'quill_block_revision' => [
+                $this->id(),
+                $this->reference('page_id', 'quill_page', nullable: true),
+                $this->reference('component_id', 'quill_component', nullable: true),
+                Column::VARCHAR('block_uid', '255')->index(),
+                Column::INT('revision')->unsigned(),
+                Column::JSON('block_json'),
+                $this->adminId(), $this->createdAt(),
+            ],
+
             'quill_block_snapshot' => [
                 $this->id(),
 

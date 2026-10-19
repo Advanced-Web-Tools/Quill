@@ -825,7 +825,9 @@ dialog :is(.editor-action-entry, .editor-action-step, .editor-action-node, .edit
 .editor-page-routes h3 { font-size: var(--editor-text-sm); font-weight: var(--editor-weight-medium); }
 .editor-page-route { display: block; overflow-wrap: anywhere; padding: 8px 0; color: var(--editor-accent); font-size: var(--editor-text-sm); }
 #editor-page-route-select { width: 100%; padding: 8px; background: var(--editor-input); color: var(--editor-ink); }
-#editor-page-route-new { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.editor-page-route-connect { display: flex; align-items: center; gap: 12px; }
+.editor-page-route-connect > select { flex: 1; min-width: 0; }
+#editor-page-route-new { display: flex; flex: none; align-items: center; gap: 8px; margin: 0; white-space: nowrap; }
 .editor-route-dialog { width: min(560px, calc(100vw - 32px)); }
 .editor-route-body { padding: 0 22px 16px; }
 .editor-route-parts { list-style: none; padding: 0; display: grid; gap: 12px; }
@@ -911,3 +913,65 @@ dialog :is(.editor-action-entry, .editor-action-step, .editor-action-node, .edit
 #editor-component-edit-divider { margin: 14px 0; border: 0; border-top: 1px solid var(--editor-line); }
 
 .editor-block-grid > .editor-block-category { grid-column: 1 / -1; min-width: 0; }
+
+/* Block VCS uses the same neutral popup surface and quiet icon controls. */
+.editor-block-history { font-family: var(--editor-font); }
+.editor-block-history [data-history-context] { margin: 5px 0 0; color: var(--editor-muted); font-size: var(--editor-text-xs); overflow-wrap: anywhere; }
+.editor-block-history-hint { margin: 0; padding: 0 22px 12px; color: var(--editor-muted); font-size: var(--editor-text-xs); line-height: 1.5; }
+.editor-block-history-list { list-style: none; margin: 0; padding: 0 22px; }
+.editor-block-history-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--editor-line); font-size: var(--editor-text-sm); }
+.editor-block-history-list li:last-child { border-bottom: 0; }
+.editor-block-history-list strong { font-weight: var(--editor-weight-medium); }
+.editor-block-history-list small { display: block; margin-top: 4px; color: var(--editor-muted); font-size: var(--editor-text-xs); }
+.editor-block-history-pagination { justify-content: space-between; color: var(--editor-muted); font-size: var(--editor-text-xs); }
+.editor-block-history .editor-action-icon { flex-shrink: 0; border: 0; background: transparent; box-shadow: none; }
+.editor-block-history .editor-action-icon:hover:not(:disabled) { background: var(--editor-input); color: var(--editor-accent); }
+.editor-block-history .editor-action-icon:disabled { opacity: .35; cursor: default; }
+
+.editor-block-history-author { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.editor-block-history-author > div { min-width: 0; }
+.editor-block-history-author p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.editor-block-history-picture { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; object-fit: cover; }
+
+.editor-settings-shortcuts button { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.editor-shortcut-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(140px, 1.3fr) 30px; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--editor-line); }
+.editor-shortcut-row label { margin: 0; font-size: var(--editor-text-sm); }
+.editor-shortcut-row input { width: 100%; min-width: 0; height: var(--editor-control-height); padding: 6px 8px; background: var(--editor-input); color: var(--editor-ink); font-size: var(--editor-text-xs); cursor: pointer; }
+.editor-shortcuts-dialog .editor-action-icon { background: transparent; border: 0; }
+.editor-shortcuts-dialog .editor-action-icon:hover { background: var(--editor-input); }
+
+.editor-media-library { min-width: 0; }
+.editor-media-provider { width: 100%; margin: 0 0 12px; }
+.editor-media-url input { width: 100%; padding: 8px; background: var(--editor-input); color: var(--editor-ink); }
+.editor-media-provider-panel { min-width: 0; max-height: 50vh; overflow: auto; }
+.editor-media-tabs { display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 0 0 8px; margin: 0 0 16px; border-bottom: 1px solid var(--editor-line); }
+.editor-media-tabs button { flex-shrink: 0; border: 0; background: transparent; color: var(--editor-muted); }
+.editor-media-tabs button:hover { background: var(--editor-input); color: var(--editor-ink); }
+.editor-media-tabs button[aria-selected=true] { background: var(--editor-input); color: var(--editor-ink); }
+.editor-image-dialog { max-height: 88vh; overflow: auto; }
+
+.editor-data-attributes .editor-data-attribute { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; border: 1px solid var(--editor-line); border-radius: var(--editor-radius-sm); }
+.editor-data-attribute-heading { display: flex; align-items: flex-end; gap: 8px; }
+.editor-data-attribute-heading .editor-link-field { flex: 1; min-width: 0; }
+.editor-data-attribute-heading > button { flex-shrink: 0; margin-bottom: 2px; }
+.editor-data-attribute-composer > .editor-link-field:first-child { position: relative; padding-right: 36px; }
+.editor-data-attribute-composer > .editor-link-field:first-child > button { position: absolute; right: 0; bottom: 0; }
+.editor-data-route-parameters { display: grid; gap: 8px; }
+.editor-data-attribute .editor-data-affixes { margin-top: 10px; }
+
+.editor-data-attributes { display: grid; gap: 12px; margin: 12px 0; }
+
+.editor-attribute-name-control { position: relative; min-width: 0; }
+.editor-attribute-name-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; text-align: left; }
+.editor-attribute-name-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-attribute-name-trigger i { font-size: 10px; color: var(--editor-muted); }
+.editor-attribute-name-popup { position: fixed; inset: auto; margin: 0; padding: 5px; max-height: min(440px,80vh); overflow: auto; border: 1px solid var(--editor-line); border-radius: var(--editor-radius-md); background: var(--editor-bg); color: var(--editor-ink); box-shadow: var(--editor-shadow-lg); font: var(--editor-text-sm)/1.4 var(--editor-font); }
+.editor-attribute-name-popup button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 28px; padding: 5px 9px; border: 0; background: transparent; text-align: left; }
+.editor-attribute-name-popup button:hover { background: var(--editor-input); }
+.editor-attribute-name-more { border-top: 1px solid var(--editor-line)!important; margin-top: 4px; }
+.editor-attribute-name-others input { width: 100%; padding: 8px; margin: 5px 0; background: var(--editor-input); color: var(--editor-ink); }
+.editor-attribute-name-results { max-height: 270px; overflow: auto; }
+
+.editor-page-route-row { display:flex; align-items:center; gap:8px; }
+.editor-page-route-row .editor-page-route { flex:1; min-width:0; overflow-wrap:anywhere; }
+.editor-page-route-row .editor-action-icon { flex:none; }

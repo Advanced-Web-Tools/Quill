@@ -12,7 +12,8 @@
             }, true);
             document.addEventListener('focusout', () => { this.#group = null; }, true);
         }
-        constructor(state) {
+        constructor(state, notify = () => {}) {
+            this.notify = notify;
             this.state = state; this.undoStack = []; this.redoStack = []; this.restoring = false;
             this.previous = this.capture();
             const undo = document.getElementById('editor-undo');
@@ -36,28 +37,22 @@
             state.addEventListener('componentrefresh', () => { this.#group = null; this.previous = this.capture(); });
             state.addEventListener('selectionchange', () => { this.#group = null; this.previous.selectedPath = state.selectedPath; });
             undo.addEventListener('click', () => this.undo()); redo.addEventListener('click', () => this.redo());
-            const keyboard = event => {
-                if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z') return;
-                if (event.target.closest('input, textarea, select, [contenteditable]')) return;
-                event.preventDefault(); event.shiftKey ? this.redo() : this.undo();
-            };
-            document.addEventListener('keydown', keyboard);
             document.getElementById('editor-canvas').addEventListener('load', () => {
-                const document = window.document.getElementById('editor-canvas').contentDocument;
-                document.addEventListener('keydown', keyboard); this.#watch(document);
+                this.#watch(document.getElementById('editor-canvas').contentDocument);
             });
             update();
         }
         capture() { return { document: this.state.getDocument(), selectedPath: this.state.selectedPath }; }
         restore(from, to) {
             this.state.assertAvailable(); this.#group = null;
-            if (!from.length) return;
+            if (!from.length) return false;
             to.push(this.capture()); this.restoring = true;
             try { const snapshot = from.pop(); this.state.restoreDocument(snapshot.document, snapshot.selectedPath); }
             finally { this.restoring = false; }
+            return true;
         }
-        undo() { this.restore(this.undoStack, this.redoStack); }
-        redo() { this.restore(this.redoStack, this.undoStack); }
+        undo() { const changed = this.restore(this.undoStack, this.redoStack); this.notify(changed ? 'Undo complete.' : 'Nothing to undo.'); }
+        redo() { const changed = this.restore(this.redoStack, this.undoStack); this.notify(changed ? 'Redo complete.' : 'Nothing to redo.'); }
     }
     window.QuillEditorHistory = QuillEditorHistory;
 })();

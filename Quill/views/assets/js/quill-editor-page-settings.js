@@ -31,6 +31,12 @@
                 destination.panel.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); this.close(); } });
             });
             editor.ui.pageRoutes = new window.QuillEditorPageRoutes(editor, bootstrap, reportError);
+            const snapshots = get('editor-page-snapshots');
+            if (snapshots && bootstrap.editorType === 'page' && bootstrap.externalSourceKind !== 'component' && Number.isSafeInteger(bootstrap.editorId)) {
+                snapshots.hidden = false;
+                editor.ui.pageHistory = new window.QuillEditorBlockHistory(editor, bootstrap, true);
+                get('editor-page-snapshots-open').addEventListener('click', () => editor.ui.pageHistory.open());
+            }
             title.addEventListener('input', () => editor.state.updateSettings({ title: title.value }));
             description.addEventListener('input', () => editor.state.updateSettings({ description: description.value }));
             const block = () => ({ attributes: {}, styles: { base: editor.state.getDocument().settings?.styles || {} } });
@@ -61,7 +67,7 @@
             };
             const adapter = {
                 canvas: { getElement: () => get('editor-canvas').contentDocument?.body }, selectedPath: null,
-                fonts: editor.fonts, palette: editor.palette, styleScope: 'base', isReadOnly: () => false,
+                mediaLibrary: editor.mediaLibrary, fonts: editor.fonts, palette: editor.palette, styleScope: 'base', isReadOnly: () => false,
                 getStyleDeclarations: declarations, setStyleDeclarations: saveDeclarations,
                 setStyle: saveStyle, reportError, on: (...args) => editor.on(...args),
                 getSelectedBlock: () => {

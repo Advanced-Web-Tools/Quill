@@ -3,16 +3,16 @@
     const root = document.getElementById('quill-editor');
     if (!root) return;
     const get = id => document.getElementById(id);
-    function toast(id, error) {
+    function toast(id, error, symbol = 'circle-exclamation') {
         const popup = get(id);
         popup.replaceChildren(); popup.hidden = !error;
         if (!error) return;
         const text = document.createElement('span'); text.textContent = error.message || error;
-        const icon = document.createElement('i'); icon.className = 'fa-solid fa-circle-exclamation'; icon.setAttribute('aria-hidden', 'true');
+        const icon = document.createElement('i'); icon.className = `fa-solid fa-${symbol}`; icon.setAttribute('aria-hidden', 'true');
         const close = document.createElement('button'); close.type = 'button'; close.setAttribute('aria-label', 'Dismiss notification');
         close.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
         close.addEventListener('click', () => { popup.hidden = true; });
-        popup.append(icon, text, close);
+        popup.append(...(popup.classList.contains('editor-toast-success') ? [] : [icon]), text, close);
     }
     const showError = error => toast('editor-error', error);
     const propertyError = error => toast('editor-property-error', error);
@@ -28,6 +28,13 @@
         updateDocumentIndicator();
         const canvas = new window.QuillEditorCanvas(get('editor-canvas'), path => state.select(path), (path, content) => state.updateBlock(path, { content }, 'canvas'));
         const editor = new window.QuillEditorApi(state, canvas, bootstrap.extensions, propertyError, bootstrap.googleFonts);
+        editor.mediaLibrary = new window.QuillEditorMediaLibrary(editor, bootstrap.mediaLibraries || []);
+        let notificationTimer;
+        editor.notify = message => {
+            clearTimeout(notificationTimer); clearTimeout(editor.ui?.save?.successTimer);
+            toast('editor-success', message, 'circle-check');
+            notificationTimer = setTimeout(() => { get('editor-success').hidden = true; }, 3000);
+        };
         editor.routes = Object.freeze((bootstrap.routes || []).map(route => Object.freeze(route)));
         editor.dataSources = Object.freeze((bootstrap.dataSources || []).map(source => Object.freeze(source)));
         editor.dataRoutes = Object.freeze((bootstrap.dataRoutes || []).map(route => Object.freeze(route)));
@@ -75,6 +82,7 @@
         editor.ui.actions = new window.QuillEditorActions(editor);
         editor.ui.inserter = new window.QuillEditorInserter(editor, picker);
         editor.ui.pageSettings = new window.QuillEditorPageSettings(editor, bootstrap, propertyError);
+        editor.ui.blockHistory = new window.QuillEditorBlockHistory(editor, bootstrap);
         editor.ui.blockToolbar = new window.QuillEditorBlockToolbar(editor);
         get('editor-add-block').addEventListener('click', () => picker.open());
         get('editor-add-component').addEventListener('click', () => picker.open(null, { componentsOnly: true }));
@@ -177,12 +185,13 @@
         window.addEventListener('beforeunload', event => {
             if (state.dirty) { event.preventDefault(); event.returnValue = ''; }
         });
-        const history = new window.QuillEditorHistory(state);
+        const history = new window.QuillEditorHistory(state, message => editor.notify(message));
         editor.ui.history = history;
         editor.ui.viewport = new window.QuillEditorViewport(editor);
         editor.ui.settings = new window.QuillEditorSettings(editor, bootstrap);
         editor.ui.animationLibrary = new window.QuillAnimationLibrary(editor, bootstrap);
         editor.ui.animations = new window.QuillAnimationStudio(editor, bootstrap.propertyAssetBase);
+        editor.ui.shortcuts = new window.QuillEditorShortcuts(editor);
         window.quillEditor = state;
         window.QuillEditor = editor;
         get('editor-state-status').textContent = 'Document loaded';

@@ -83,6 +83,35 @@
 
         setRenderHook(hook) { this.#renderHook = hook; }
         getElement(path) { return this.#nodes.get(path) || null; }
+        // Rich-text formatting can insert inline siblings before untouched structural children.
+        remapBlockPaths(remappings) {
+            remappings = remappings.filter(({ from, to }) => from !== to);
+            if (!remappings.length) return;
+            const remap = path => {
+                const match = remappings.find(({ from }) => path === from || path.startsWith(from + '.'));
+                return match ? match.to + path.slice(match.from.length) : path;
+            };
+            const nodes = new Map();
+            for (const [path, element] of this.#nodes) {
+                const next = remap(path); nodes.set(next, element); this.#paths.set(element, next);
+                if (element.hasAttribute('data-quill-editor-node')) element.dataset.quillEditorNode = next;
+            }
+            this.#nodes = nodes;
+            const components = new Map();
+            for (const [path, outline] of this.#components) {
+                const next = remap(path); components.set(next, outline); this.#paths.set(outline, next);
+            }
+            this.#components = components;
+            for (const element of this.#frame.contentDocument.querySelectorAll('[data-quill-component] *')) {
+                const path = this.#paths.get(element);
+                if (path) this.#paths.set(element, remap(path));
+                if (element.hasAttribute('data-quill-editor-node')) element.dataset.quillEditorNode = remap(element.dataset.quillEditorNode);
+            }
+            this.#baseRules = new Map([...this.#baseRules].map(([path, rules]) => [remap(path), rules.map(rule => rule.replace(/(\[data-quill-editor-node=")([0-9.]+)("\])/g, (_, start, value, end) => start + remap(value) + end))]));
+            if (this.#baseStyles) this.#baseStyles.textContent = [...this.#baseRules.values()].flat().join('\n');
+            this.#cleanups = new Map([...this.#cleanups].map(([path, cleanup]) => [remap(path), cleanup]));
+        }
+
         getBounds(path) {
             const element = this.getElement(path);
             if (!element) return null;
@@ -197,7 +226,7 @@
             // Scripts and navigation stay disabled; same-origin access lets the host draw and select DOM nodes.
             frame.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
                 + '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src http: https: data:; '
-                + 'style-src \'unsafe-inline\' http: https:; font-src http: https: data:; form-action \'none\'; base-uri \'none\'">'
+                + 'media-src http: https:; style-src \'unsafe-inline\' http: https:; font-src http: https: data:; form-action \'none\'; base-uri \'none\'">'
                 + '</head><body></body></html>';
         }
 

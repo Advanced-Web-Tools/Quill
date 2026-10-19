@@ -19,10 +19,10 @@ final class Quill extends RuntimeLinkerAPI
         $this->eventDispatcher->addListener(\URPC\api\events\BeforeRenderEvent::NAME, new \Quill\services\rendering\ConnectedDataRenderListener());
 
         $nav = new NavigationItem('Quill', '/dashboard/quill', $this->getInfo()['icon'], [
-            new NavigationItem('Pages', '/dashboard/quill', null, [], 1),
-            new NavigationItem('Components', '/dashboard/quill/components', null, [], 1),
-            new NavigationItem('Routes', '/dashboard/quill/routes', null, [], 1),
-        ], 1);
+            new NavigationItem('Pages', '/dashboard/quill', null, [], \Quill\controllers\QuillControllerBase::PERMISSION_LEVEL),
+            new NavigationItem('Components', '/dashboard/quill/components', null, [], \Quill\controllers\QuillControllerBase::PERMISSION_LEVEL),
+            new NavigationItem('Routes', '/dashboard/quill/routes', null, [], \Quill\controllers\QuillControllerBase::PERMISSION_LEVEL),
+        ], \Quill\controllers\QuillControllerBase::PERMISSION_LEVEL);
 
         $this->eventDispatcher->addListener(NavigationResponseEvent::NAME, new NavigationResponseEvent($nav));
     }

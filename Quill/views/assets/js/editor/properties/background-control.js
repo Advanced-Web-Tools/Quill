@@ -15,8 +15,13 @@ export function backgroundImageControl(editor, signal) {
     const hint = document.createElement('p'); hint.textContent = 'Use an image URL or a path from your site. Changes appear immediately.';
     const close = document.createElement('button'); close.type = 'button'; close.className = 'editor-image-close'; close.setAttribute('aria-label', 'Close image picker');
     close.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
-    dialog.append(title, close, label, hint); document.body.append(dialog);
-    button.addEventListener('click', () => { dialog.showModal(); input.focus(); }, { signal });
+    const urlPanel = document.createElement('div'); urlPanel.className = 'editor-media-url'; urlPanel.append(label, hint);
+    dialog.append(title, close); document.body.append(dialog);
+    const library = editor.mediaLibrary || new window.QuillEditorMediaLibrary(editor);
+    const picker = library.mount({ container: dialog, type: 'image', mode: 'tabs', urlPanel, signal, lazy: true,
+        onSelect: item => { input.value = item.url; apply(`url(${JSON.stringify(item.url)})`); } });
+    button.addEventListener('click', () => { picker.resume(); dialog.showModal(); (dialog.querySelector('[role=tab][aria-selected=true]') || input).focus(); }, { signal });
+    dialog.addEventListener('close', () => picker.suspend(), { signal });
     close.addEventListener('click', () => dialog.close(), { signal });
     const apply = value => {
         commitPaint(editor, (style, computed) => setBackgroundPaint(style, value, computed));
@@ -37,6 +42,7 @@ export function backgroundImageControl(editor, signal) {
         if (force && dialog.open) dialog.close();
         const match = String(value).match(/^url\(["']?(.*?)["']?\)$/);
         if (force || document.activeElement !== input) input.value = match ? match[1] : '';
+        picker.update(match ? match[1] : '', force);
         remove.hidden = !value || value === 'none';
         button.querySelector('span').textContent = remove.hidden ? 'Select image' : 'Change image';
     } };

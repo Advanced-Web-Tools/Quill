@@ -32,12 +32,14 @@ Quill brings visual page building, reusable components and dynamic content to AW
 ## Stay in control
 
 - **Publishing:** Separate drafts, public previews, revision snapshots, history and restore.
-- **Editing confidence:** Grouped Undo/Redo, style copy/paste, optional autosave and save-conflict protection.
+- **Block version history:** Browse saved block changes, see their authors and restore individual versions from the floating toolbar.
+- **Editing confidence:** Grouped Undo/Redo, configurable keyboard shortcuts, block and style copy/paste, optional autosave and save-conflict protection.
 - **Personal workspace:** Light/dark/system appearance, default device, save preferences and configurable autosave intervals.
 - **Organized dashboard:** Search pages, components, templates and external resources; manage routes and versions.
 
 ## Built for the AWT ecosystem
 
+- **Media libraries:** Register image and video providers, with shared pickers and direct URL fallback.
 - **Extensible by design:** Register blocks, properties, controls, actions and external resources through Quill's extension APIs.
 - **External editing:** Edit provider pages and components, including block additions and structural changes, while preserving the provider source.
 - **URPC rendering:** Structured JSON documents, Quill ↔ URPC conversion and runtime document hooks. Editor-only tools stay out of published pages.

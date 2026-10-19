@@ -8,7 +8,7 @@
             editor.on('viewportchange', () => this.#position());
             editor.on('styleclipboardchange', () => {
                 const paste = this.#toolbar?.querySelector('[data-toolbar-action="paste-style"]');
-                if (paste) paste.disabled = !editor.hasCopiedStyle;
+                if (paste) paste.disabled = this.#toolbar.hasAttribute('data-component') || !editor.hasCopiedStyle;
             });
             document.querySelector('.editor-canvas-area').addEventListener('scroll', () => this.#position());
             document.addEventListener('pointerdown', () => { if (!this.#panel) { this.#closeMenu(); this.#finishText(); } });
@@ -247,6 +247,7 @@
                 properties.forEach(property => element.style.removeProperty(property));
             });
         }
+        #textTail = []; #textTailNodes = [];
         #pointerActive = false; #originalInline = new WeakMap(); #text = null; #range = null; #textMode = false; #richControls = null; #returnToText = null; #lineBreak = null;
         #textRoot(node) {
             let element = node?.nodeType === 1 ? node : node?.parentElement;
@@ -255,7 +256,9 @@
             while (element && !element.matches('p,h1,h2,h3,h4,h5,h6,li,blockquote,figcaption,button,label,td,th')) element = element.parentElement;
             if (!element && nearest?.matches(inline + ',div,section,article,aside,main,header,footer,nav')) element = nearest;
             if (!element?.hasAttribute('data-quill-editor-node') || element.closest('[data-quill-component]')) return null;
-            if ([...element.querySelectorAll('*')].some(child => !child.matches(inline + ',[data-quill-editor-text]'))) return null;
+            if ([...element.querySelectorAll('*')].some(child => !child.matches(inline + ',[data-quill-editor-text]')) && nearest !== element) element = nearest;
+            if (element?.closest('[data-quill-component]')) return null;
+            if (!element?.matches(inline + ',p,h1,h2,h3,h4,h5,h6,li,blockquote,figcaption,button,label,td,th,div,section,article,aside,main,header,footer,nav')) return null;
             return element;
         }
         #installText(doc) {
@@ -321,7 +324,17 @@
             const text = doc.createElement('span'); text.dataset.quillEditorText = ''; text.contentEditable = 'true';
             text.style.cssText = 'display:inline;white-space:pre-wrap'; text.role = 'textbox'; text.setAttribute('aria-label', `Edit ${root.tagName.toLowerCase()} text`);
             text.setAttribute('aria-multiline', 'true');
-            text.append(...root.childNodes); root.append(text); root.draggable = false; this.#text = text;
+            // Keep structural children outside the editing host; formatting owns only the leading inline run.
+            const inline = 'span,strong,b,em,i,u,s,strike,sub,sup,a,code,br';
+            const prefix = [];
+            for (const node of root.childNodes) {
+                if (node.nodeType === 1 && (!node.matches(inline) || node.matches('[data-quill-component]') || [...node.querySelectorAll('*')].some(child => !child.matches(inline)))) break;
+                prefix.push(node);
+            }
+            this.#textTailNodes = [...root.children].filter(node => !prefix.includes(node) && node.hasAttribute('data-quill-editor-node'));
+            this.#textTail = this.#textTailNodes.map(node => this.#editor.state.getBlock(node.dataset.quillEditorNode));
+            const after = root.childNodes[prefix.length] || null;
+            text.append(...prefix); root.insertBefore(text, after); root.draggable = false; this.#text = text;
             this.#syncTextPlaceholder();
             text.addEventListener('input', () => this.#invoke(() => { this.#syncTextPlaceholder(); this.#saveText(); }, false));
             text.addEventListener('paste', event => { event.preventDefault(); doc.execCommand('insertText', false, event.clipboardData.getData('text/plain')); });
@@ -402,7 +415,13 @@
                 }
                 return { content, children };
             };
-            this.#editor.state.updateBlock(path, serialize(text), 'canvas');
+            const changed = serialize(text);
+            const offset = changed.children.length;
+            changed.children.push(...structuredClone(this.#textTail));
+            this.#editor.state.updateBlock(path, changed, 'canvas');
+            const remappings = this.#textTailNodes.map((node, index) => ({ from: node.dataset.quillEditorNode, to: `${path}.${offset + index}` }));
+            this.#editor.canvas.remapBlockPaths?.(remappings);
+            for (const [index, node] of this.#textTailNodes.entries()) node.dataset.quillEditorNode = `${path}.${offset + index}`;
         }
         #hasTextRange() { return !!this.#text?.isConnected && !!this.#range && !this.#range.collapsed && !!this.#range.toString().trim(); }
         #showText(active) {
@@ -547,7 +566,7 @@
             const label = doc.createElement('span'); label.className = 'quill-toolbar-label';
             const name = block.editor?.label || block.descriptor.name;
             const icon = doc.createElement('i');
-            const fallback = { img: 'image', p: 'paragraph', button: 'hand-pointer', a: 'link', section: 'layer-group', div: 'square' };
+            const fallback = { video: 'video', img: 'image', p: 'paragraph', button: 'hand-pointer', a: 'link', section: 'layer-group', div: 'square' };
             const registered = this.#editor.blocks.get(block.definition_key)?.icon;
             icon.className = /^(?:fa-solid|fa-regular|fa-brands) fa-[a-z0-9-]+$/.test(registered || '') ? registered : `fa-solid fa-${fallback[block.descriptor.name] || (/^h[1-6]$/.test(block.descriptor.name) ? 'heading' : 'cube')}`;
             icon.setAttribute('aria-hidden', 'true'); label.append(icon, doc.createTextNode(name)); label.title = name; toolbar.append(label);
@@ -557,7 +576,7 @@
                 const notice = doc.createElement('span'); notice.className = 'quill-component-toolbar-notice';
                 notice.textContent = 'Shared component · Edit in component editor';
                 notice.title = 'Content and styling are managed in the component editor.';
-                toolbar.append(notice); doc.body.append(toolbar); this.#toolbar = toolbar; this.#position(); return;
+                toolbar.append(notice);
             }
             const parts = path.split('.'), index = Number(parts.pop()), parent = parts.join('.');
             const sectionIndex = Number(parts[0]), parentPath = parts.length > 1 ? parent : null;
@@ -570,28 +589,30 @@
                 horizontal = Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top);
                 reversed = horizontal ? (index ? b.left > a.left : b.left < a.left) : (index ? b.top > a.top : b.top < a.top);
             }
-            const before = this.#button(doc, 'Move before', horizontal ? (reversed ? 'arrow-right' : 'arrow-left') : (reversed ? 'arrow-down' : 'arrow-up'), () => this.#editor.state.moveSelected('up'), 'move-before'); before.disabled = index === 0;
-            const after = this.#button(doc, 'Move after', horizontal ? (reversed ? 'arrow-left' : 'arrow-right') : (reversed ? 'arrow-up' : 'arrow-down'), () => this.#editor.state.moveSelected('down'), 'move-after'); after.disabled = index === siblings.length - 1;
-            const selectParent = this.#button(doc, 'Select parent', 'turn-up', () => this.#editor.select(parentPath), 'select-parent'); selectParent.disabled = parentPath === null;
-            toolbar.append(before, after, selectParent, this.#button(doc, 'Duplicate block', 'copy', () => this.#editor.duplicateBlock(path), 'duplicate'));
-            const tag = block.descriptor.name.toLowerCase();
-            if (['div', 'section', 'article', 'main', 'aside', 'header', 'footer', 'nav', 'form'].includes(tag)) {
-                const layout = computed.display.includes('grid') ? 'grid' : computed.display.includes('flex') ? (computed.flexDirection.includes('column') ? 'column' : 'row') : 'block';
-                toolbar.append(this.#select(doc, 'Layout', layout, { block: 'Block', row: 'Row', column: 'Column', grid: 'Grid' }, value => {
-                    const style = this.#editor.getStyleDeclarations(path); style.display = ['row', 'column'].includes(value) ? 'flex' : value;
-                    if (['row', 'column'].includes(value)) style.flexDirection = value; else style.removeProperty('flex-direction');
-                    this.#editor.setStyleDeclarations(style.cssText, path);
-                }));
-                if (/flex|grid/.test(computed.display)) toolbar.append(this.#select(doc, 'Align items', computed.alignItems, { '': 'Align', start: 'Start', center: 'Center', end: 'End', stretch: 'Stretch' }, value => this.#editor.setStyle('align-items', value, path)));
-            } else if (block.content && !['script', 'style'].includes(tag)) {
-                let alignment = computed.textAlign;
-                if (alignment === 'start') alignment = computed.direction === 'rtl' ? 'right' : 'left';
-                if (alignment === 'end') alignment = computed.direction === 'rtl' ? 'left' : 'right';
-                toolbar.append(this.#select(doc, 'Text alignment', alignment, { '': 'Align', left: 'Left', center: 'Center', right: 'Right', justify: 'Justify' }, value => this.#editor.setStyle('text-align', value, path)));
+            if (!shared) {
+                const before = this.#button(doc, 'Move before', horizontal ? (reversed ? 'arrow-right' : 'arrow-left') : (reversed ? 'arrow-down' : 'arrow-up'), () => this.#editor.state.moveSelected('up'), 'move-before'); before.disabled = index === 0;
+                const after = this.#button(doc, 'Move after', horizontal ? (reversed ? 'arrow-left' : 'arrow-right') : (reversed ? 'arrow-up' : 'arrow-down'), () => this.#editor.state.moveSelected('down'), 'move-after'); after.disabled = index === siblings.length - 1;
+                const selectParent = this.#button(doc, 'Select parent', 'turn-up', () => this.#editor.select(parentPath), 'select-parent'); selectParent.disabled = parentPath === null;
+                toolbar.append(before, after, selectParent, this.#button(doc, 'Duplicate block', 'copy', () => this.#editor.duplicateBlock(path), 'duplicate'));
+                const tag = block.descriptor.name.toLowerCase();
+                if (['div', 'section', 'article', 'main', 'aside', 'header', 'footer', 'nav', 'form'].includes(tag)) {
+                    const layout = computed.display.includes('grid') ? 'grid' : computed.display.includes('flex') ? (computed.flexDirection.includes('column') ? 'column' : 'row') : 'block';
+                    toolbar.append(this.#select(doc, 'Layout', layout, { block: 'Block', row: 'Row', column: 'Column', grid: 'Grid' }, value => {
+                        const style = this.#editor.getStyleDeclarations(path); style.display = ['row', 'column'].includes(value) ? 'flex' : value;
+                        if (['row', 'column'].includes(value)) style.flexDirection = value; else style.removeProperty('flex-direction');
+                        this.#editor.setStyleDeclarations(style.cssText, path);
+                    }));
+                    if (/flex|grid/.test(computed.display)) toolbar.append(this.#select(doc, 'Align items', computed.alignItems, { '': 'Align', start: 'Start', center: 'Center', end: 'End', stretch: 'Stretch' }, value => this.#editor.setStyle('align-items', value, path)));
+                } else if (block.content && !['script', 'style'].includes(tag)) {
+                    let alignment = computed.textAlign;
+                    if (alignment === 'start') alignment = computed.direction === 'rtl' ? 'right' : 'left';
+                    if (alignment === 'end') alignment = computed.direction === 'rtl' ? 'left' : 'right';
+                    toolbar.append(this.#select(doc, 'Text alignment', alignment, { '': 'Align', left: 'Left', center: 'Center', right: 'Right', justify: 'Justify' }, value => this.#editor.setStyle('text-align', value, path)));
+                }
+                if (['img', 'video'].includes(tag)) toolbar.append(this.#button(doc, tag === 'img' ? 'Replace image' : 'Replace video', tag === 'img' ? 'image' : 'video', async () => {
+                    const panel = await this.#editor.ui.properties.showCategory(tag === 'img' ? 'image' : 'video'); const field = panel.querySelector('[data-attribute=src]'); field?.focus(); field?.select();
+                }, 'replace-image'));
             }
-            if (tag === 'img') toolbar.append(this.#button(doc, 'Replace image', 'image', async () => {
-                const panel = await this.#editor.ui.properties.showCategory('image'); const field = panel.querySelector('[data-attribute=src]'); field?.focus(); field?.select();
-            }, 'replace-image'));
             const more = this.#button(doc, 'More block options', 'ellipsis-vertical', () => {
                 const open = this.#menu.hidden; this.#menu.hidden = !open; more.setAttribute('aria-expanded', String(open));
                 if (open) { this.#positionMenu(); this.#menu.querySelector('button:not(:disabled)')?.focus(); }
@@ -604,10 +625,17 @@
             };
             item('Insert before', 'plus', () => this.#editor.ui.picker.open({ sectionIndex, parentPath, index }), 'insert-before');
             item('Insert after', 'plus', () => this.#editor.ui.picker.open({ sectionIndex, parentPath, index: index + 1 }), 'insert-after');
-            const outdent = item('Move out of parent', 'arrow-turn-up', () => this.#editor.state.moveSelected('outdent'), 'outdent'); outdent.disabled = parentPath === null;
-            item('Copy style', 'paintbrush', () => this.#editor.copyStyle(path), 'copy-style').title = 'Copy block styles for all viewports into Quill';
-            const paste = item('Paste style', 'paste', () => this.#editor.pasteStyle(path), 'paste-style'); paste.disabled = !this.#editor.hasCopiedStyle; paste.title = 'Paste styles from the Quill style clipboard';
-            item('Convert to component', 'cubes', () => this.#editor.ui.components.open(path), 'convert-component');
+            const outdent = item('Move out of parent', 'arrow-turn-up', () => this.#editor.state.moveSelected('outdent'), 'outdent'); outdent.disabled = !!shared || parentPath === null;
+            const copy = item('Copy style', 'paintbrush', () => this.#editor.copyStyle(path), 'copy-style'); copy.disabled = !!shared; copy.title = 'Copy block styles for all viewports into Quill';
+            const paste = item('Paste style', 'paste', () => this.#editor.pasteStyle(path), 'paste-style'); paste.disabled = !!shared || !this.#editor.hasCopiedStyle; paste.title = 'Paste styles from the Quill style clipboard';
+            if (shared) {
+                const convert = item('Convert to block', 'cube', () => this.#editor.ui.components.detach(path), 'convert-block');
+                convert.disabled = !!shared.external;
+                if (shared.external) convert.title = 'External components are managed in the component editor.';
+            } else {
+                item('Version history', 'clock-rotate-left', () => this.#editor.ui.blockHistory.open(path), 'version-history');
+                item('Convert to component', 'cubes', () => this.#editor.ui.components.open(path), 'convert-component');
+            }
             item('Delete block', 'trash-can', () => this.#editor.removeBlock(path), 'delete');
             toolbar.append(menu); this.#menu = menu;
             menu.addEventListener('keydown', event => {
@@ -624,7 +652,9 @@
                 const at = buttons.indexOf(doc.activeElement); if (at < 0) return;
                 event.preventDefault(); buttons[(at + (event.key === 'ArrowRight' ? 1 : buttons.length - 1)) % buttons.length].focus();
             });
-            doc.body.append(toolbar); this.#toolbar = toolbar; this.#addTextControls(doc, toolbar); this.#position();
+            doc.body.append(toolbar); this.#toolbar = toolbar; this.#position();
+            if (shared) return;
+            this.#addTextControls(doc, toolbar); this.#position();
             const dataDefinition = this.#editor.properties.get('Quill:connect-data');
             if (dataDefinition) this.#editor.modules.matches(dataDefinition.condition, block, this.#editor).then(matches => {
                 if (!matches || this.#toolbar !== toolbar) return;

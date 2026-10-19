@@ -11,8 +11,12 @@ final class ModelConnectionRecords implements ConnectionRecords
 
     public function find(array $connection, array $routeParameters): iterable
     {
+        if ($connection['inherit'] ?? false) return [];
         $columns = ($this->catalog ??= new DataSourceCatalog())->columns($connection['source']);
         $needed = [$connection['select'], $connection['set']['content']['content'], ...($connection['set']['content']['additional'] ?? []), ...array_column($connection['set']['attributes'], 'value')];
+        foreach ($connection['set']['attributes'] as $mapping) {
+            $needed = [...$needed, ...($mapping['additional'] ?? []), ...array_values($mapping['route']['parameters'] ?? [])];
+        }
         if ($connection['mode'] === 'collection') $needed[] = $connection['sort_by'];
         $query = $connection['query'] ?? null;
         $needed = [...$needed, ...ConnectionQuery::columns($query)];
