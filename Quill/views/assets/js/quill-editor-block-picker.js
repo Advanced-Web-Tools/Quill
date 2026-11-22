@@ -68,10 +68,10 @@
             document.getElementById('editor-add-component').setAttribute('aria-expanded', 'false');
             document.getElementById(this.componentsOnly ? 'editor-add-component' : 'editor-add-block').focus();
         }
-        category(fragment, name, search, defaultOpen = true) {
+        category(fragment, name, search, defaultOpen = true, stateKey = name) {
             const section = document.createElement('details'); section.className = 'editor-block-category'; section.dataset.blockCategory = name;
-            section.open = !!search || (this.expanded.get(name) ?? defaultOpen);
-            section.addEventListener('toggle', () => { if (!search && section.isConnected) this.expanded.set(name, section.open); });
+            section.open = !!search || (this.expanded.get(stateKey) ?? defaultOpen);
+            section.addEventListener('toggle', () => { if (!search && section.isConnected) this.expanded.set(stateKey, section.open); });
             const heading = document.createElement('summary'); heading.textContent = name;
             const chevron = document.createElement('i'); chevron.className = 'fa-solid fa-chevron-down'; chevron.setAttribute('aria-hidden', 'true'); heading.append(chevron);
             const grid = document.createElement('div'); grid.className = 'editor-block-grid';
@@ -123,28 +123,36 @@
                 if (!group.items.length) {
                     const empty = document.createElement('p'); empty.className = 'editor-component-empty'; empty.textContent = 'Save a block as a component to reuse it here.'; grid.append(empty);
                 }
+                const providers = new Map();
                 for (const component of group.items) {
-                    const button = document.createElement('button'); button.type = 'button'; button.dataset.componentId = component.id;
-                    button.title = component.description || component.name;
-                    const icon = document.createElement('i'); icon.className = 'editor-block-icon fa-solid fa-cubes'; icon.setAttribute('aria-hidden', 'true');
-                    const name = document.createElement('strong'); name.textContent = component.name; button.append(icon, name);
-                    if (component.provider) {
-                        const provider = document.createElement('small'); provider.className = 'editor-resource-provider'; provider.textContent = `Provided by ${component.provider}`; button.append(provider);
-                        button.title = `${component.description || component.name} · Inserts a shared component`;
+                    const provider = component.provider?.trim() || (group.name === 'Components' ? 'Local components' : 'Other providers');
+                    if (!providers.has(provider)) providers.set(provider, []);
+                    providers.get(provider).push(component);
+                }
+                for (const [provider, items] of [...providers].sort(([left], [right]) => left.localeCompare(right))) {
+                    const providerGrid = this.category(grid, provider, search, true, JSON.stringify([group.name, provider]));
+                    providerGrid.parentElement.classList.add('editor-component-provider');
+                    providerGrid.parentElement.dataset.componentProvider = provider;
+                    for (const component of items) {
+                        const button = document.createElement('button'); button.type = 'button'; button.dataset.componentId = component.id;
+                        button.title = component.description || component.name;
+                        const icon = document.createElement('i'); icon.className = 'editor-block-icon fa-solid fa-cubes'; icon.setAttribute('aria-hidden', 'true');
+                        const name = document.createElement('strong'); name.textContent = component.name; button.append(icon, name);
+                        if (component.provider) button.title = `${component.description || component.name} · Provided by ${component.provider} · Inserts a shared component`;
+                        button.addEventListener('click', async () => {
+                            const session = this.session, current = () => session === this.session && !this.panel.hidden;
+                            const target = this.insertionTarget;
+                            const section = target?.sectionIndex ?? Number(this.sectionSelect.value);
+                            const parent = target ? target.parentPath : this.editor.selectedPath;
+                            button.disabled = true;
+                            try {
+                                const inserted = await this.editor.ui.components.insert(component.id, section, parent, target?.index ?? null, current);
+                                if (inserted !== null) { this.close(); this.onError(null); }
+                            } catch (error) { if (current()) this.onError(error); }
+                            finally { if (button.isConnected) button.disabled = false; }
+                        });
+                        providerGrid.append(button);
                     }
-                    button.addEventListener('click', async () => {
-                        const session = this.session, current = () => session === this.session && !this.panel.hidden;
-                        const target = this.insertionTarget;
-                        const section = target?.sectionIndex ?? Number(this.sectionSelect.value);
-                        const parent = target ? target.parentPath : this.editor.selectedPath;
-                        button.disabled = true;
-                        try {
-                            const inserted = await this.editor.ui.components.insert(component.id, section, parent, target?.index ?? null, current);
-                            if (inserted !== null) { this.close(); this.onError(null); }
-                        } catch (error) { if (current()) this.onError(error); }
-                        finally { if (button.isConnected) button.disabled = false; }
-                    });
-                    grid.append(button);
                 }
             }
             if (!categories.size && !components.length && search) { const empty = document.createElement('p'); empty.textContent = this.componentsOnly ? 'No matching components.' : 'No matching blocks.'; fragment.append(empty); }
