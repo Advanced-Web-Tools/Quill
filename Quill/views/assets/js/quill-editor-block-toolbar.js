@@ -537,6 +537,8 @@
                 + '[data-quill-toolbar] .quill-toolbar-menu button span{min-width:0;overflow:hidden;text-overflow:ellipsis}'
                 + '[data-quill-toolbar] .quill-toolbar-menu [data-toolbar-action=delete]{color:var(--editor-error)}';
             doc.head.append(style);
+            const dropdownStyles = document.getElementById('editor-dropdown-styles');
+            if (dropdownStyles) doc.head.append(dropdownStyles.cloneNode(true));
         }
         #render(path, handle) {
             if (path !== this.#path || !this.#text?.isConnected) this.#finishText();

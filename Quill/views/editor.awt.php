@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/gh/mdbassit/Coloris@v0.25.0/dist/coloris.min.js" defer></script>
     <link rel="stylesheet" id="editor-design-tokens" href="@asset('css/quill-editor-tokens.css')">
     <link rel="stylesheet" href="@asset('css/quill-editor.css')">
+    <link rel="stylesheet" id="editor-dropdown-styles" href="@asset('css/quill-editor-dropdowns.css')">
     <script src="@asset('js/quill-editor-library.js')" defer></script>
     <script src="@asset('js/quill-animations.js')" defer></script>
     <script src="@asset('js/quill-animation-session.js')" defer></script>
@@ -42,7 +43,7 @@
     <script src="@asset('js/quill-editor-media-library.js')" defer></script>
     <script src="@asset('js/quill-editor.js')" defer></script>
 </head>
-<body>
+<body class="quill-editor-dropdowns">
 @php
     $bootstrap = [
         'document' => isset($editorError) ? null : json_decode($editorDocumentJson ?? '{"schema_version":1,"sections":[{"name":"main","blocks":[]}]}', false, 512, JSON_THROW_ON_ERROR),

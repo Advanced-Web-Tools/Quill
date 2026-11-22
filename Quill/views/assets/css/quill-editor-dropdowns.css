@@ -1,0 +1,71 @@
+/* Native customizable selects keep keyboard, form and change-event behavior,
+   with the same top-layer menu surface as the attribute-name picker. */
+@supports (appearance: base-select) {
+    :is(.quill-editor-dropdowns, [data-quill-toolbar]) select:not([multiple]):is(:not([size]), [size="0"], [size="1"]) {
+        appearance: base-select !important;
+        align-items: center;
+        gap: 8px;
+        text-align: start;
+    }
+    :is(.quill-editor-dropdowns, [data-quill-toolbar]) select::picker(select) {
+        appearance: base-select;
+        box-sizing: border-box;
+        min-width: anchor-size(width);
+        max-width: calc(100vw - 24px);
+        max-height: min(440px, 80vh);
+        margin-block: 4px;
+        padding: 5px;
+        overflow: auto;
+        border: 1px solid var(--editor-line);
+        border-radius: var(--editor-radius-md);
+        background: var(--editor-bg);
+        color: var(--editor-ink);
+        box-shadow: var(--editor-shadow-lg);
+        font: var(--editor-text-sm, 12px)/1.4 var(--editor-font, sans-serif);
+    }
+    /* The save split button already supplies its own chevron. */
+    .quill-editor-dropdowns #editor-save-mode::picker-icon {
+        display: none;
+    }
+    .quill-editor-dropdowns #editor-save-mode option:is(:hover, :focus) {
+        background: var(--editor-input);
+    }
+    :is(.quill-editor-dropdowns, [data-quill-toolbar]) select::picker-icon {
+        color: var(--editor-muted);
+        font-size: 10px;
+    }
+    :is(.quill-editor-dropdowns, [data-quill-toolbar]) select option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 28px;
+        padding: 5px 9px;
+        border: 0;
+        border-radius: var(--editor-radius-sm);
+        background: transparent;
+        color: var(--editor-ink);
+        font: inherit;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    :is(.quill-editor-dropdowns, [data-quill-toolbar]) select option:is(:hover, :focus) {
+        outline: none;
+        background: var(--editor-input);
+    }
+    :is(.quill-editor-dropdowns, [data-quill-toolbar]) select option:checked {
+        color: var(--editor-accent);
+    }
+    :is(.quill-editor-dropdowns, [data-quill-toolbar]) select option::checkmark {
+        margin-inline-start: auto;
+        order: 1;
+        color: var(--editor-accent);
+    }
+    :is(.quill-editor-dropdowns, [data-quill-toolbar]) select option:disabled {
+        opacity: .4;
+    }
+    :is(.quill-editor-dropdowns, [data-quill-toolbar]) select optgroup {
+        padding: 5px 0;
+        color: var(--editor-muted);
+        font: inherit;
+    }
+}
