@@ -222,6 +222,10 @@ summary::-webkit-details-marker { display: none; }
 .editor-toast-success::before { content: '\f058'; flex-shrink: 0; font-family: 'Font Awesome 6 Free'; font-weight: 900; font-size: 13px; color: var(--editor-success); }
 .editor-noscript { position: fixed; inset: 70px 20px auto; background: var(--editor-bg); color: var(--editor-error); padding: 20px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+/* The viewport-sized top-layer host avoids modal and panel overflow clipping.
+   Only the picker intercepts pointers; the rest of the editor stays interactive. */
+.editor-color-picker-layer { position: fixed; inset: 0; width: auto; height: auto; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; overflow: visible; background: transparent; pointer-events: none; z-index: 10000; }
+.editor-color-picker-layer .clr-picker { pointer-events: auto; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; }
 /* Coloris retains its controls and follows the shared surface palette. */
 .clr-picker.clr-dark { background: var(--editor-raised); color: var(--editor-ink); box-shadow: var(--editor-shadow-lg); }
 .clr-dark input.clr-color { background: var(--editor-input); border-color: var(--editor-muted); color: var(--editor-ink); border-radius: 20px; }
