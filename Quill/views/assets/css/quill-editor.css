@@ -58,12 +58,12 @@ summary::-webkit-details-marker { display: none; }
 .editor-tree-section > .editor-tree-list { padding-left: 0; }
 .editor-tree-row { display: flex; gap: 3px; align-items: center; min-width: 0; border-radius: var(--editor-radius-sm); margin: 2px 0; }
 .editor-tree-row:has([aria-current=true]) { background: var(--editor-selection-soft); }
-.editor-tree-toggle { border: 0; padding: 2px; width: 18px; min-height: 26px; flex: 0 0 18px; background: transparent; color: var(--editor-muted); }
+.editor-tree-toggle { display: inline-flex; align-items: center; justify-content: center; height: 30px; border: 0; padding: 2px; width: 18px; min-height: 26px; flex: 0 0 18px; background: transparent; color: var(--editor-muted); }
 .editor-tree-toggle i { font-size: 8px; }
-.editor-tree-select { display: flex; align-items: center; gap: 7px; text-align: left; width: 100%; min-width: 0; min-height: var(--editor-control-height); padding: 5px 4px; background: transparent; border: 0; font-size: var(--editor-text-xs); }
-.editor-tree-select > i { color: var(--editor-muted); font-size: var(--editor-text-xs); width: 13px; text-align: center; }
+.editor-tree-select { display: flex; align-items: center; justify-content: flex-start; flex: 1; gap: 8px; text-align: left; width: 100%; min-width: 0; min-height: var(--editor-control-height); padding: 5px 4px; background: transparent; border: 0; font-size: var(--editor-text-xs); }
+.editor-tree-select > i { color: var(--editor-muted); font-size: var(--editor-text-xs); display: inline-flex; align-items: center; justify-content: center; flex: 0 0 16px; width: 16px; height: 20px; line-height: 1; text-align: center; }
 .editor-tree-select[aria-current=true], .editor-tree-select[aria-current=true] > i { color: var(--editor-accent); }
-.editor-tree-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-tree-label { display: block; min-width: 0; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editor-tree-empty { padding: 10px; color: var(--editor-muted); font-size: var(--editor-text-xs); line-height: 1.6; }
 .editor-tree-actions { display: flex; gap: 5px; padding: 0 16px 14px; }
 .editor-tree-actions button { min-height: 27px; width: 30px; padding: 2px; }
