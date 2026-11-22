@@ -509,6 +509,41 @@
             const symbol = doc.createElement('i'); symbol.className = `fa-solid fa-${icon}`; symbol.setAttribute('aria-hidden', 'true'); button.append(symbol);
             button.addEventListener('click', () => this.#invoke(action, command !== 'more')); return button;
         }
+        #editName(label, path) {
+            this.#closeMenu();
+            const input = label.ownerDocument.createElement('input');
+            const original = this.#editor.getBlock(path);
+            input.type = 'text'; input.maxLength = 120; input.dataset.toolbarAction = 'block-name';
+            input.setAttribute('aria-label', 'Block name');
+            input.title = 'Enter to save · Escape to cancel · Clear to use default name';
+            input.value = original.editor?.label || ''; input.placeholder = original.descriptor.name;
+            const field = label.ownerDocument.createElement('span');
+            field.className = 'quill-toolbar-label quill-toolbar-name-editor';
+            field.append(label.querySelector('i').cloneNode(true), input);
+            let finished = false;
+            const finish = (save, focus = false) => {
+                if (finished) return;
+                finished = true;
+                field.replaceWith(label);
+                if (focus) label.focus({ preventScroll: true });
+                if (save && input.value.trim() !== (original.editor?.label || '')) this.#invoke(() => {
+                    const block = this.#editor.state.getBlock(path);
+                    const metadata = { ...block._quill, editor: { ...block._quill?.editor } };
+                    const name = input.value.trim();
+                    if (name) metadata.editor.label = name; else delete metadata.editor.label;
+                    this.#editor.state.updateBlock(path, { _quill: metadata }, 'block-name');
+                });
+                this.#position();
+            };
+            input.addEventListener('blur', () => finish(true));
+            input.addEventListener('keydown', event => {
+                event.stopPropagation();
+                if (event.key === 'Enter' || event.key === 'Escape') {
+                    event.preventDefault(); finish(event.key === 'Enter', true);
+                }
+            });
+            label.replaceWith(field); input.focus({ preventScroll: true }); input.select(); this.#position();
+        }
         #select(doc, label, value, options, action) {
             const select = doc.createElement('select'); select.title = label; select.setAttribute('aria-label', label);
             for (const [key, title] of Object.entries(options)) select.add(new Option(title, key));
@@ -530,7 +565,11 @@
                 + '[data-quill-toolbar][data-component]{border-color:var(--editor-component)}'
                 + '[data-quill-toolbar][data-component] [data-drag-path]{background:var(--editor-component);color:var(--editor-bg)}'
                 + '[data-quill-toolbar] .quill-component-toolbar-notice{padding:4px;color:var(--editor-component);font:11px/1.4 var(--editor-font);white-space:normal}'
-                + '[data-quill-toolbar] .quill-toolbar-label{display:inline-flex;align-items:center;gap:6px;max-width:85px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 5px;font:11px/1.2 var(--editor-font)}'
+                + '[data-quill-toolbar] .quill-toolbar-label{display:inline-flex;align-items:center;justify-content:flex-start;flex:0 1 auto;gap:6px;box-sizing:border-box;width:auto;height:30px;min-width:0;max-width:180px;margin:0;border:1px solid transparent;border-radius:var(--editor-radius-sm);white-space:nowrap;padding:0 5px;font:12px/18px var(--editor-font)}'
+                + '[data-quill-toolbar] .quill-toolbar-label>i{display:inline-flex;align-items:center;justify-content:center;flex:0 0 14px;width:14px;height:18px;line-height:1;font-size:12px}'
+                + '[data-quill-toolbar] .quill-toolbar-label>span{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;line-height:18px}'
+                + '[data-quill-toolbar] .quill-toolbar-name-editor{border-color:var(--editor-accent);background:var(--editor-input)}'
+                + '[data-quill-toolbar] .quill-toolbar-name-editor input{flex:1;min-width:0;width:120px;height:28px;margin:0;padding:0;border:0;background:transparent;font:inherit;line-height:18px;outline:none;box-shadow:none}'
                 + '[data-quill-toolbar] select{box-sizing:border-box;max-width:88px;min-width:0;height:30px;margin:0;padding:3px;border:1px solid var(--editor-line);border-radius:var(--editor-radius-sm);background:var(--editor-input);color:var(--editor-ink);font:11px var(--editor-font)}'
                 + '[data-quill-toolbar] .quill-toolbar-menu{position:absolute;z-index:1;width:200px;overflow:auto;box-sizing:border-box;padding:5px;border:1px solid var(--editor-line);border-radius:var(--editor-radius-md);background:var(--editor-bg);box-shadow:var(--editor-shadow-lg)}'
                 + '[data-quill-toolbar] .quill-toolbar-menu button{width:100%;height:32px;justify-content:flex-start;text-align:left;padding:7px 10px;white-space:nowrap}'
@@ -563,13 +602,19 @@
             const computed = doc.defaultView.getComputedStyle(element);
             const toolbar = doc.createElement('div'); toolbar.dataset.quillToolbar = ''; toolbar.role = 'toolbar'; toolbar.setAttribute('aria-label', 'Block toolbar');
             handle.style.cssText = ''; toolbar.append(handle);
-            const label = doc.createElement('span'); label.className = 'quill-toolbar-label';
+            const label = doc.createElement(shared ? 'span' : 'button'); label.className = 'quill-toolbar-label';
+            if (!shared) {
+                label.type = 'button'; label.dataset.toolbarAction = 'rename';
+                label.setAttribute('aria-label', 'Rename block');
+                label.addEventListener('click', () => this.#editName(label, path));
+            }
             const name = block.editor?.label || block.descriptor.name;
             const icon = doc.createElement('i');
             const fallback = { video: 'video', img: 'image', p: 'paragraph', button: 'hand-pointer', a: 'link', section: 'layer-group', div: 'square' };
             const registered = this.#editor.blocks.get(block.definition_key)?.icon;
             icon.className = /^(?:fa-solid|fa-regular|fa-brands) fa-[a-z0-9-]+$/.test(registered || '') ? registered : `fa-solid fa-${fallback[block.descriptor.name] || (/^h[1-6]$/.test(block.descriptor.name) ? 'heading' : 'cube')}`;
-            icon.setAttribute('aria-hidden', 'true'); label.append(icon, doc.createTextNode(name)); label.title = name; toolbar.append(label);
+            icon.setAttribute('aria-hidden', 'true'); const caption = doc.createElement('span'); caption.textContent = name;
+            label.append(icon, caption); label.title = `${name} · Click to rename`; toolbar.append(label);
             if (shared) {
                 toolbar.dataset.component = '';
                 label.textContent = shared.name; label.title = shared.name;
