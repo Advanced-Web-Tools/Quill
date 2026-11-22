@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version_mode:
-        description: Version source
+        description: Version source, or rerelease to replace the latest release ZIP
         required: true
         type: choice
         default: manifest
@@ -14,6 +14,7 @@ on:
           - minor
           - patch
           - manual
+          - rerelease
       manual_version:
         description: Version to use in manual mode (for example, 1.2.3)
         type: string
@@ -39,9 +40,20 @@ jobs:
       - name: Resolve and update the package version
         id: version
         env:
+          GH_TOKEN: ${{ github.token }}
           VERSION_MODE: ${{ inputs.version_mode }}
           MANUAL_VERSION: ${{ inputs.manual_version }}
         run: |
+          if [[ "$VERSION_MODE" == rerelease ]]; then
+            LATEST_RELEASE=$(gh release view --json tagName,isImmutable)
+            if [[ "$(jq -r .isImmutable <<< "$LATEST_RELEASE")" == true ]]; then
+              echo "::error::The latest release is immutable and its ZIP cannot be replaced."
+              exit 1
+            fi
+            LATEST_VERSION=$(jq -er .tagName <<< "$LATEST_RELEASE")
+            export LATEST_VERSION
+          fi
+
           python3 - <<'PY'
           import json
           import os
@@ -66,6 +78,8 @@ jobs:
 
           if mode == "manifest":
               version = current
+          elif mode == "rerelease":
+              version = os.environ["LATEST_VERSION"]
           elif mode == "manual":
               version = os.environ["MANUAL_VERSION"].strip()
           elif mode in {"major", "minor", "patch"}:
@@ -96,6 +110,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_BRANCH: ${{ github.event.repository.default_branch }}
+          VERSION_MODE: ${{ inputs.version_mode }}
           VERSION: ${{ steps.version.outputs.number }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
@@ -103,6 +118,27 @@ jobs:
 
           title="Quill-$VERSION"
           archive="$RUNNER_TEMP/$title.zip"
+
+          if [[ "$VERSION_MODE" == rerelease ]]; then
+            # Stage the archived manifest version on the runner only.
+            git add -- Quill/manifest.json
+            git archive --format=zip --output="$archive" "$(git write-tree):Quill"
+
+            # Keep a copy in case the replacement upload fails after removing the old ZIP.
+            assets=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
+            if grep -Fxq -- "$title.zip" <<< "$assets"; then
+              backup=$(mktemp -d "$RUNNER_TEMP/quill-release-backup.XXXXXX")
+              gh release download "$VERSION" --pattern "$title.zip" --dir "$backup"
+              if ! gh release upload "$VERSION" "$archive" --clobber; then
+                gh release upload "$VERSION" "$backup/$title.zip" || true
+                exit 1
+              fi
+            else
+              gh release upload "$VERSION" "$archive"
+            fi
+            exit 0
+          fi
+
           tag="refs/tags/$VERSION"
           branch="refs/heads/$RELEASE_BRANCH"
           push_refs=()
