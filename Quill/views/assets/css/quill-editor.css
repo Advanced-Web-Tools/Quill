@@ -979,3 +979,6 @@ dialog :is(.editor-action-entry, .editor-action-step, .editor-action-node, .edit
 .editor-page-route-row { display:flex; align-items:center; gap:8px; }
 .editor-page-route-row .editor-page-route { flex:1; min-width:0; overflow-wrap:anywhere; }
 .editor-page-route-row .editor-action-icon { flex:none; }
+
+.editor-component-provider { grid-column: 1 / -1; min-width: 0; margin: 0; }
+.editor-component-provider > summary { padding: 10px 2px; text-transform: none; letter-spacing: normal; }
