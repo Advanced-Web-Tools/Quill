@@ -18,6 +18,10 @@ on:
       manual_version:
         description: Version to use in manual mode (for example, 1.2.3)
         type: string
+      notify_rerelease:
+        description: Send a release.edited webhook after replacing the ZIP
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -111,6 +115,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_BRANCH: ${{ github.event.repository.default_branch }}
           VERSION_MODE: ${{ inputs.version_mode }}
+          NOTIFY_RERELEASE: ${{ inputs.notify_rerelease }}
           VERSION: ${{ steps.version.outputs.number }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
@@ -135,6 +140,17 @@ jobs:
               fi
             else
               gh release upload "$VERSION" "$archive"
+            fi
+
+            if [[ "$NOTIFY_RERELEASE" == true ]]; then
+              notes="$RUNNER_TEMP/rerelease-notes.md"
+              run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT"
+              marker="<!-- quill-rerelease: $run_url -->"
+              gh release view "$VERSION" --json body | jq -r --arg marker "$marker" '
+                (.body // "" | split("\n") | map(select(startswith("<!-- quill-rerelease: ") | not)) | join("\n")) as $body
+                | $marker + "\n" + $body
+              ' > "$notes"
+              gh release edit "$VERSION" --notes-file "$notes"
             fi
             exit 0
           fi
