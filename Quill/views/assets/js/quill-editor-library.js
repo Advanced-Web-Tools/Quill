@@ -41,18 +41,45 @@
         },
     };
     window.QuillEditorColorPicker.setup();
-    document.addEventListener('focusin', event => {
+    // A top-layer host escapes scrolling/overflow containers while remaining a
+    // descendant of the active modal, so its controls can still receive focus.
+    const colorPickerLayer = document.createElement('div');
+    colorPickerLayer.className = 'editor-color-picker-layer';
+    colorPickerLayer.setAttribute('popover', 'manual');
+    let mountingColorPicker = false;
+    const mountColorPicker = event => {
+        if (mountingColorPicker) return;
         if (!event.target.matches?.('[data-coloris]') || !window.Coloris) return;
         const parent = event.target.closest('dialog[open]') || document.body;
         const picker = document.getElementById('clr-picker');
-        if (picker && picker.parentElement !== parent) { window.Coloris.close(); window.Coloris({ parent }); }
-    }, true);
+        if (!picker) return;
+        if (colorPickerLayer.parentElement !== parent || picker.parentElement !== colorPickerLayer) {
+            mountingColorPicker = true;
+            window.Coloris.close();
+            colorPickerLayer.hidePopover?.();
+            parent.append(colorPickerLayer);
+            window.Coloris({ parent: colorPickerLayer });
+            mountingColorPicker = false;
+        }
+        if (colorPickerLayer.showPopover && !colorPickerLayer.matches(':popover-open')) colorPickerLayer.showPopover();
+    };
+    document.addEventListener('focusin', mountColorPicker, true);
+    // Also cover repeated clicks and programmatically dispatched swatch clicks.
+    document.addEventListener('click', mountColorPicker, true);
     document.addEventListener('close', event => {
-        const picker = document.getElementById('clr-picker');
-        if (event.target.tagName === 'DIALOG' && !event.target.open && picker && event.target.contains(picker)) {
-            window.Coloris?.close(); window.Coloris?.({ parent: document.body });
+        if (event.target.tagName === 'DIALOG' && !event.target.open && event.target.contains(colorPickerLayer)) {
+            window.Coloris?.close();
+            colorPickerLayer.hidePopover?.();
+            document.body.append(colorPickerLayer);
+            window.Coloris?.({ parent: colorPickerLayer });
         }
     }, true);
+    // Coloris positions once on opening; close when its anchor moves.
+    document.addEventListener('scroll', event => {
+        const picker = document.getElementById('clr-picker');
+        if (picker?.classList.contains('clr-open') && !picker.contains(event.target)) window.Coloris?.close();
+    }, true);
+    window.addEventListener('resize', () => window.Coloris?.close());
     // Saving and background library refreshes must classify session errors consistently.
     class QuillEditorResponse {
         static async read(response, fallback = 'Unable to access this resource.') {
