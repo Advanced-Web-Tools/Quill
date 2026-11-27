@@ -67,12 +67,14 @@
 
         setDragging(active) {
             this.#dragging = active;
+            const document = this.#frame.contentDocument;
+            document?.documentElement.toggleAttribute('data-quill-dragging', active);
             const target = this.#frame.ownerDocument.getElementById('editor-main-drop');
             if (target) target.hidden = !active || this.#mainSection === null;
             if (!active) {
                 this.#frame.ownerDocument.querySelector('.editor-workspace')?.removeAttribute('data-main-drop');
-                this.#frame.contentDocument?.querySelectorAll('[data-quill-drop]').forEach(element => element.removeAttribute('data-quill-drop'));
-                this.#frame.contentDocument?.body.removeAttribute('data-quill-main-drop');
+                document?.querySelectorAll('[data-quill-drop]').forEach(element => element.removeAttribute('data-quill-drop'));
+                document?.body?.removeAttribute('data-quill-main-drop');
             }
         }
 
@@ -141,6 +143,7 @@
             this.#frame = frame;
             this.#onSelect = onSelect;
             this.#onTextChange = onTextChange;
+            this.#installBlockDragging(frame.ownerDocument, target => target.closest('.editor-tree-row[draggable="true"]'));
             this.#ready = new Promise(resolve => frame.addEventListener('load', () => {
                 const document = frame.contentDocument;
                 document.addEventListener('click', event => {
@@ -161,6 +164,11 @@
                     while (element && !this.#paths.has(element)) element = element.parentElement;
                     return element;
                 };
+                this.#installBlockDragging(document, target => {
+                    if (this.picking || target.closest('[contenteditable], [data-quill-resizer], [data-quill-inserter]')) return null;
+                    const source = target.closest('[draggable="true"]');
+                    return this.#paths.has(source) ? source : null;
+                });
                 const clearDrop = () => {
                     document.querySelectorAll('[data-quill-drop]').forEach(element => element.removeAttribute('data-quill-drop'));
                     document.body.removeAttribute('data-quill-main-drop');
@@ -228,6 +236,131 @@
                 + '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src http: https: data:; '
                 + 'media-src http: https:; style-src \'unsafe-inline\' http: https:; font-src http: https: data:; form-action \'none\'; base-uri \'none\'">'
                 + '</head><body></body></html>';
+        }
+
+        #installBlockDragging(document, sourceFor) {
+            const owner = this.#frame.ownerDocument;
+            const root = document.documentElement;
+            let tracking = false;
+
+            // Native dragging can end without delivering any target events to the editor.
+            // Keep the existing drop handlers and supply their events from the pointer.
+            document.addEventListener('dragstart', event => {
+                if (event.isTrusted && tracking) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                }
+            }, true);
+
+            document.addEventListener('pointerdown', event => {
+                if (event.button !== 0 || !event.isPrimary || tracking) return;
+                const source = sourceFor(event.target);
+                if (!source) return;
+                const { pointerId, clientX, clientY } = event;
+                const listeners = new AbortController();
+                const options = { signal: listeners.signal, capture: true };
+                tracking = true;
+                let transfer, previous, position, scrollFrame;
+                const dispatch = (target, type, x, y, relatedTarget = null) => target.dispatchEvent(new DragEvent(type, {
+                    bubbles: true, cancelable: true, clientX: x, clientY: y, dataTransfer: transfer, relatedTarget,
+                }));
+                const locate = next => {
+                    const bounds = this.#frame.getBoundingClientRect();
+                    const scaleX = bounds.width / this.#frame.offsetWidth;
+                    const scaleY = bounds.height / this.#frame.offsetHeight;
+                    if (!scaleX || !scaleY) return {};
+                    let x = next.clientX, y = next.clientY;
+                    if (document !== owner) {
+                        x = bounds.left + x * scaleX;
+                        y = bounds.top + y * scaleY;
+                    }
+                    const outer = owner.elementFromPoint(x, y);
+                    if (outer !== this.#frame) return { target: outer?.closest('.editor-workspace, #editor-tree') ? outer : null, x, y };
+                    x = (x - bounds.left) / scaleX;
+                    y = (y - bounds.top) / scaleY;
+                    return { target: this.#frame.contentDocument?.elementFromPoint(x, y), x, y };
+                };
+                const hover = next => {
+                    const { target, x, y } = locate(next);
+                    if (target !== previous) {
+                        if (previous) dispatch(previous, 'dragleave', x, y, target);
+                        previous = target;
+                        if (target) dispatch(target, 'dragenter', x, y);
+                    }
+                    const allowed = target && !dispatch(target, 'dragover', x, y);
+                    return { target, x, y, allowed };
+                };
+                const scroll = () => {
+                    scrollFrame = null;
+                    const { target, y } = locate(position);
+                    if (!target) return;
+                    const canvas = target.ownerDocument !== owner;
+                    const scroller = canvas ? target.ownerDocument.scrollingElement : target.closest('.editor-leftbar, .editor-canvas-area');
+                    if (!scroller) return;
+                    const bounds = canvas ? { top: 0, bottom: scroller.clientHeight } : scroller.getBoundingClientRect();
+                    const edge = Math.min(32, (bounds.bottom - bounds.top) / 4);
+                    const distance = y < bounds.top + edge ? y - bounds.top - edge : Math.max(0, y - bounds.bottom + edge);
+                    if (!distance) return;
+                    const before = scroller.scrollTop;
+                    scroller.scrollBy({ top: distance / 3, behavior: 'instant' });
+                    if (scroller.scrollTop === before) return;
+                    hover(position);
+                    scrollFrame = owner.defaultView.requestAnimationFrame(scroll);
+                };
+                const finish = next => {
+                    tracking = false;
+                    listeners.abort();
+                    if (scrollFrame != null) owner.defaultView.cancelAnimationFrame(scrollFrame);
+                    if (!transfer) return;
+                    const click = new AbortController();
+                    const clickOptions = { signal: click.signal, once: true, capture: true };
+                    document.defaultView.addEventListener('pointerdown', () => click.abort(), clickOptions);
+                    document.defaultView.addEventListener('click', event => {
+                        if (event.detail) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        }
+                        click.abort();
+                    }, clickOptions);
+                    if (root.hasPointerCapture(pointerId)) root.releasePointerCapture(pointerId);
+                    try {
+                        if (next?.type === 'pointerup') {
+                            const { target, x, y, allowed } = hover(next);
+                            if (allowed) dispatch(target, 'drop', x, y);
+                        }
+                    } finally {
+                        if (previous?.isConnected) dispatch(previous, 'dragleave', 0, 0);
+                        dispatch(source.isConnected ? source : root, 'dragend', 0, 0);
+                    }
+                };
+                const move = next => {
+                    if (next.pointerId !== pointerId) return;
+                    if (!source.isConnected || !(next.buttons & 1)) { finish(); return; }
+                    if (!transfer) {
+                        if (Math.hypot(next.clientX - clientX, next.clientY - clientY) < 5) return;
+                        transfer = new DataTransfer();
+                        if (!dispatch(source, 'dragstart', clientX, clientY) || !transfer.types.includes('application/x-quill-block')) {
+                            finish();
+                            return;
+                        }
+                        root.setPointerCapture(pointerId);
+                        document.getSelection()?.removeAllRanges();
+                    }
+                    next.preventDefault();
+                    position = next;
+                    hover(next);
+                    if (scrollFrame == null) scrollFrame = owner.defaultView.requestAnimationFrame(scroll);
+                };
+                const end = next => { if (next.pointerId === pointerId) finish(next); };
+                const escape = next => { if (next.key === 'Escape') { next.preventDefault(); finish(); } };
+                document.addEventListener('pointermove', move, options);
+                document.addEventListener('pointerup', end, options);
+                document.addEventListener('pointercancel', end, options);
+                root.addEventListener('lostpointercapture', end, options);
+                document.defaultView.addEventListener('blur', () => finish(), { signal: listeners.signal });
+                document.addEventListener('keydown', escape, options);
+                if (owner !== document) owner.addEventListener('keydown', escape, options);
+            }, true);
         }
 
         editText(path) {
@@ -317,6 +450,9 @@
                 + '[data-quill-editor-selected]{outline:2px solid var(--editor-selection)!important;outline-offset:3px!important}'
                 + '[data-quill-drop=before]{box-shadow:0 -3px var(--editor-accent)!important}[data-quill-drop=after]{box-shadow:0 3px var(--editor-accent)!important}[data-quill-drop=inside]{outline:2px dashed var(--editor-accent)!important;background-color:var(--editor-accent-soft)!important}'
                 + '[data-quill-drop=invalid]{outline:2px dashed var(--editor-error)!important;cursor:not-allowed!important}'
+                // Let the document receive drops through floating editor controls.
+                + 'html[data-quill-dragging] :is([data-quill-toolbar],[data-quill-resizer],[data-quill-inserter]),'
+                + 'html[data-quill-dragging] :is([data-quill-toolbar],[data-quill-resizer],[data-quill-inserter]) *{pointer-events:none!important}'
                 + '[data-quill-resizer]{position:fixed;inset:0;pointer-events:none;z-index:2147483646}'
                 + '[data-quill-resizer][hidden],[data-quill-resize][hidden]{display:none!important}'
                 + '[data-quill-resize]{all:initial;position:fixed;box-sizing:border-box;pointer-events:auto;touch-action:none;transform:translate(-50%,-50%);display:grid;place-items:center}'
