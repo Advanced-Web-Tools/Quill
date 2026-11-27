@@ -18,6 +18,7 @@ use Quill\api\events\PageDocumentRequestEvent;
 final class QuillPageDocumentProvider implements IURPCDocumentProvider
 {
     private ?ConversionResult $result = null;
+    private string $pageName = '';
 
     public function __construct(private QuillPage $page, private QuillToUrpcConverter $converter, private bool $draft = false) {}
 
@@ -32,6 +33,7 @@ final class QuillPageDocumentProvider implements IURPCDocumentProvider
         // Route/controller instances can outlive the lookup that registered them.
         $page = $this->page->newQuery()->where(['id' => $pageId, 'deleted_at' => null])->firstModel();
         if ($page === null) throw ConversionException::at($path, 'The page is missing or deleted.');
+        $this->pageName = $page->name;
         $sourceNamespace = 'Quill/page/' . $pageId;
         $snapshotId = $page->getParam('published_snapshot_id');
         if ($page->source_type === 'urpc') {
@@ -67,4 +69,6 @@ final class QuillPageDocumentProvider implements IURPCDocumentProvider
     }
 
     public function getConversionResult(): ?ConversionResult { return $this->result; }
+
+    public function getPageName(): string { return $this->pageName; }
 }
